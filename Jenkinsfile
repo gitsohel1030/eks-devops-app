@@ -40,7 +40,7 @@ pipeline {
         stage('Update Manifest') {
             steps{
                 sh """
-                sed -i 's|IMAGE_TAG|${IMAGE_TAG}g' k8s/deployment.yaml
+                sed -i "s|IMAGE_TAG|${IMAGE_TAG}|g" k8s/deployment.yaml
                 """
             }
         }
