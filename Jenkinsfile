@@ -59,7 +59,7 @@ pipeline {
 
         stage('Verify Rollout') {
             steps{
-                sh "kubectl rollout status deployment/web-app -n prod-app"
+                sh "kubectl rollout status deployment/nginx -n prod-app"
             }
         }
     }
