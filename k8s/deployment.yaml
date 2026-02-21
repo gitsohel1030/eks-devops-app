@@ -20,7 +20,7 @@ spec:
     spec:
       containers:
         - name: nweb
-          image: 608827180555.dkr.ecr.ap-south-1.amazonaws.com/web-app:IMAGE_TAG
+          image: 608827180555.dkr.ecr.ap-south-1.amazonaws.com/web-app:${IMAGE_TAG}
           ports:
             - containerPort: 80
           resources:
