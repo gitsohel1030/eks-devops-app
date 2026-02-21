@@ -60,12 +60,19 @@ pipeline {
         stage('Health Check') {
             steps {
                 sh """
+                    echo "Waiting for pods to start..."
                     sleep 20
-                    STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://k8s-prodapp-webingre-fb76ccc10f-2038335722.ap-south-1.elb.amazonaws.com)
-                    if ["${STATUS}" != "200"]; then
+
+                    STATUS=\$(curl -s -o /dev/null -w "%{http_code}" http://k8s-prodapp-webingre-fb76ccc10f-2038335722.ap-south-1.elb.amazonaws.com)
+
+                    echo "HTTP Status: \$STATUS"
+
+                    if [ "\$STATUS" != "200" ]; then
                         echo "Health check failed"
                         exit 1
                     fi
+
+                    echo "Health check passed"
                 """
             }
         }
