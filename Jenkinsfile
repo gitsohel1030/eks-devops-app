@@ -81,6 +81,7 @@ pipeline {
             steps {
                 timeout(time: 2, unit: "MINUTES") {
                     sh "kubectl rollout status deployment/nginx -n prod-app"
+                }
             }
         }
     }
