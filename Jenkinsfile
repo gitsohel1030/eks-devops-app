@@ -6,7 +6,7 @@ pipeline {
         CLUSTER_NAME = "my-eks-cluster"
         ACCOUNT_ID = "608827180555"
         ECR_REPO = "${ACCOUNT_ID}.dkr.ecr.ap-south-1.amazonaws.com/web-app"
-        IMAGE_TAG = "${env.GIT_COMMIT.take(7)}-${env.BUILD_NUMBER}"
+        IMAGE_TAG = "${env.GIT_COMMIT.take(7)}"
     }
 
     stages {
