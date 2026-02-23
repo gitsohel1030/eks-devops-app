@@ -11,8 +11,8 @@ pipeline {
     IMAGE_TAG      = "${env.GIT_COMMIT ? env.GIT_COMMIT.take(7) : ''}"
     IMAGE_EXISTS   = "false"
     DEPLOY_NEEDED  = "true"
-    K8S_NAMESPACE  = "prod-app"
-    K8S_DEPLOYMENT = "nginx"
+    // K8S_NAMESPACE  = "prod-app"
+    // K8S_DEPLOYMENT = "nginx"
 
     // App/K8s naming
     APP_NAME        = "nginx"          // base name for deployments
