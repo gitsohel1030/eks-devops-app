@@ -118,7 +118,7 @@ pipeline {
           set -euo pipefail
 
           DEPLOY_NEEDED=true
-          if kubectl get deployment/\${K8S_DEPLOYMENT} -n \${K8S_NAMESPACE} >/dev/null 2>&1; then
+          if kubectl get deployment/"${K8S_DEPLOYMENT}" -n \${K8S_NAMESPACE} >/dev/null 2>&1; then
             CURRENT_IMAGE=$(kubectl get deployment/\${K8S_DEPLOYMENT} -n \${K8S_NAMESPACE} -o jsonpath="{.spec.template.spec.containers[0].image}")
             echo "Current deployment image: \${CURRENT_IMAGE}"
             
