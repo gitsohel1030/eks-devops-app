@@ -190,12 +190,12 @@ pipeline {
 
           # //Pick source deployment file based on TARGET_COLOR
 
-          SRC_DEPLOY="k8s/deploy-${TARGET_COLOR}.yaml"
+          SRC_DEPLOY="k8s/${TARGET_COLOR}-deployment.yaml"
 
           # //Render deployment (inject image tag, names, namespace)
 
           APP_NAME="${APP_NAME}" K8S_NAMESPACE="${K8S_NAMESPACE}" ECR_REPO="${ECR_REPO}" IMAGE_TAG="${IMAGE_TAG}" envsubst \
-            < "${SRC_DEPLOY}" > "k8s/rendered/deploy-${TARGET_COLOR}.yaml"
+            < "${SRC_DEPLOY}" > "k8s/rendered/${TARGET_COLOR}-deployment.yaml"
 
           # //Render canary service pointing to TARGET_COLOR
 
@@ -214,7 +214,7 @@ pipeline {
       steps {
         sh '''
           set -eu
-          kubectl apply -f k8s/rendered/deploy-${TARGET_COLOR}.yaml
+          kubectl apply -f k8s/rendered/${TARGET_COLOR}-deployment.yaml
           kubectl rollout status deployment/${APP_NAME}-${TARGET_COLOR} -n ${K8S_NAMESPACE} --timeout=1m
         '''
       }

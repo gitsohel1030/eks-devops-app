@@ -7,7 +7,7 @@ spec:
   type: ClusterIP
   selector:
     app: ${APP_NAME}
-    color: blue
+    version: blue
   ports:
     # - name: nginx-svc-port
     #   protocol: TCP

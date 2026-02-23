@@ -13,12 +13,12 @@ spec:
   selector:
     matchLabels:
       app: ${APP_NAME}
-      color: blue
+      version: blue
   template:
     metadata:
       labels:
         app: ${APP_NAME}
-        color: blue
+        version: blue
     spec:
       containers:
         - name: ${APP_NAME}
