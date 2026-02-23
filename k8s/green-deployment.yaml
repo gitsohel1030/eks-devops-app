@@ -1,7 +1,7 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: ${APP_NAME}-${COLOR}
+  name: ${APP_NAME}-green
   namespace: ${K8S_NAMESPACE}
 spec:
   replicas: 2

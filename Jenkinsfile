@@ -15,7 +15,7 @@ pipeline {
     // K8S_DEPLOYMENT = "nginx"
 
     // App/K8s naming
-    APP_NAME        = "nginx"          // base name for deployments
+    APP_NAME        = "web-app"          // base name for deployments
     K8S_NAMESPACE   = "prod-app"
     SERVICE_NAME    = "web-svc"        // the stable Service the ALB/Ingress points to
 
