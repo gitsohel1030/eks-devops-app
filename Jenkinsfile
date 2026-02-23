@@ -218,7 +218,7 @@ pipeline {
       sh "kubectl rollout undo deployment/${K8S_DEPLOYMENT} -n ${K8S_NAMESPACE} || true"
     }
     success {
-      echo "Pipeline successful."
+      echo "Pipeline successful..."
     }
   }
 }
