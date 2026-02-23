@@ -34,14 +34,14 @@ pipeline {
     stage('Check/Ensure ECR Repo + Tag') {
       steps {
         sh '''
-          set -euo pipefail
+          set -eu pipefail
           echo "Ensuring ECR repository ${REPO_NAME} exists (region: ${AWS_REGION})..."
 
           if ! aws ecr describe-repositories \
                 --repository-names "${REPO_NAME}" \
                 --region "${AWS_REGION}" >/dev/null 2>&1; then
             echo "ECR repo ${REPO_NAME} not found. Creating..."
-            
+
             aws ecr create-repository \
               --repository-name "${REPO_NAME}" \
               --region "${AWS_REGION}" >/dev/null
@@ -79,7 +79,7 @@ pipeline {
       when { expression { env.IMAGE_EXISTS == 'false' } }
       steps {
         sh '''
-          set -euo pipefail
+          set -eu pipefail
           aws ecr get-login-password --region ${AWS_REGION} \
             | docker login --username AWS --password-stdin ${ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com
         '''
@@ -98,7 +98,7 @@ pipeline {
     stage('Check if Deploy Needed') {
       steps {
         sh '''
-          set -euo pipefail
+          set -eu pipefail
 
           DEPLOY_NEEDED=true
           if kubectl get deployment/${K8S_DEPLOYMENT} -n ${K8S_NAMESPACE} >/dev/null 2>&1; then
@@ -161,7 +161,7 @@ pipeline {
       when { expression { env.DEPLOY_NEEDED == 'true' } }
       steps {
         sh '''
-          set -euo pipefail
+          set -eu pipefail
           echo "Waiting for pods to stabilize..."
           sleep 20
 
