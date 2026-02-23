@@ -118,32 +118,32 @@ pipeline {
           set -euo pipefail
 
           DEPLOY_NEEDED=true
-          if kubectl get deployment/${K8S_DEPLOYMENT} -n ${K8S_NAMESPACE} >/dev/null 2>&1; then
-            CURRENT_IMAGE=$(kubectl get deployment/${K8S_DEPLOYMENT} -n ${K8S_NAMESPACE} -o jsonpath="{.spec.template.spec.containers[0].image}")
-            echo "Current deployment image: ${CURRENT_IMAGE}"
+          if kubectl get deployment/\${K8S_DEPLOYMENT} -n \${K8S_NAMESPACE} >/dev/null 2>&1; then
+            CURRENT_IMAGE=$(kubectl get deployment/\${K8S_DEPLOYMENT} -n \${K8S_NAMESPACE} -o jsonpath="{.spec.template.spec.containers[0].image}")
+            echo "Current deployment image: \${CURRENT_IMAGE}"
             
-            if echo "${CURRENT_IMAGE}" | grep -q ':'; then
-              CURRENT_TAG="${CURRENT_IMAGE##*:}"
+            if echo "\${CURRENT_IMAGE}" | grep -q ':'; then
+              CURRENT_TAG="\${CURRENT_IMAGE##*:}"
             else
               CURRENT_TAG=""  # no tag to compare; assume deploy needed
             fi
 
-            if [ "${CURRENT_TAG}" = "${IMAGE_TAG}" ]; then
-              echo "Deployment already at desired tag: ${IMAGE_TAG}"
+            if [ "\${CURRENT_TAG}" = "\${IMAGE_TAG}" ]; then
+              echo "Deployment already at desired tag: \${IMAGE_TAG}"
               DEPLOY_NEEDED=false
             else
-              echo "Deployment tag (${CURRENT_TAG}) differs from desired (${IMAGE_TAG})."
+              echo "Deployment tag (\${CURRENT_TAG}) differs from desired (\${IMAGE_TAG})."
             fi
           else
-            echo "Deployment ${K8S_DEPLOYMENT} -n ${K8S_NAMESPACE} not found. Will deploy."
+            echo "Deployment \${K8S_DEPLOYMENT} -n \${K8S_NAMESPACE} not found. Will deploy."
           fi
 
-          echo "DEPLOY_NEEDED=${DEPLOY_NEEDED}" > .deploy_needed.env
+          echo "DEPLOY_NEEDED=\${DEPLOY_NEEDED}" > .deploy_needed.env
         """
         script {
           def p = readProperties file: '.deploy_needed.env'
           env.DEPLOY_NEEDED = p['DEPLOY_NEEDED']
-          echo "DEPLOY_NEEDED=${env.DEPLOY_NEEDED}"
+          echo "DEPLOY_NEEDED=\${env.DEPLOY_NEEDED}"
         }
       }
     }
@@ -154,7 +154,7 @@ pipeline {
         sh """
           set -eu
           # Render manifest by substituting IMAGE_TAG inside template
-          IMAGE_TAG="${IMAGE_TAG}" envsubst < k8s/deployment.yaml > k8s/deployment_rendered.yaml
+          IMAGE_TAG="\${IMAGE_TAG}" envsubst < k8s/deployment.yaml > k8s/deployment_rendered.yaml
           echo "Rendered: k8s/deployment_rendered.yaml"
         """
       }
@@ -171,7 +171,7 @@ pipeline {
       when { expression { env.DEPLOY_NEEDED == 'true' } }
       steps {
         timeout(time: 2, unit: 'MINUTES') {
-          sh "kubectl rollout status deployment/${K8S_DEPLOYMENT} -n ${K8S_NAMESPACE}"
+          sh "kubectl rollout status deployment/\${K8S_DEPLOYMENT} -n ${K8S_NAMESPACE}"
         }
       }
     }
@@ -186,9 +186,9 @@ pipeline {
 
           # Replace this with your service/ingress URL or a cluster-internal check
           STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://k8s-prodapp-webingre-fb76ccc10f-2038335722.ap-south-1.elb.amazonaws.com)
-          echo "HTTP Status: ${STATUS}"
+          echo "HTTP Status: \${STATUS}"
 
-          if [ "${STATUS}" != "200" ]; then
+          if [ "\${STATUS}" != "200" ]; then
             echo "Health check failed"
             exit 1
           fi
@@ -200,7 +200,7 @@ pipeline {
     stage('Skip Notice (no deploy)') {
       when { expression { env.DEPLOY_NEEDED == 'false' } }
       steps {
-        echo "Skipping Update/Deploy/Health/Rollout — deployment already runs tag ${IMAGE_TAG}."
+        echo "Skipping Update/Deploy/Health/Rollout — deployment already runs tag \${IMAGE_TAG}."
       }
     }
 
@@ -215,7 +215,7 @@ pipeline {
   post {
     failure {
       echo "Deployment failed, attempting rollback..."
-      sh "kubectl rollout undo deployment/${K8S_DEPLOYMENT} -n ${K8S_NAMESPACE} || true"
+      sh "kubectl rollout undo deployment/\${K8S_DEPLOYMENT} -n \${K8S_NAMESPACE} || true"
     }
     success {
       echo "Pipeline successful..."
