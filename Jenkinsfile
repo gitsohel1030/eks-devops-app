@@ -182,6 +182,15 @@ pipeline {
     //   }
     // }
 
+    stage('Ensure Namespace') {
+      steps {
+        sh '''
+          set -eu
+          kubectl get ns ${K8S_NAMESPACE} >/dev/null 2>&1 || kubectl create ns ${K8S_NAMESPACE}
+        '''
+      }
+    }
+
     stage('Render Manifests (target color)') {
       steps {
         sh '''
