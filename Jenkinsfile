@@ -315,7 +315,7 @@ pipeline {
       '''
     }
     success {
-      echo "Blue/Green deployment successful."
+      echo "Blue/Green deployment successful..."
     }
   }
 }
