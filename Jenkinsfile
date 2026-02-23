@@ -275,10 +275,10 @@ pipeline {
 
     stage('Flip Service Selector to Target Color') {
       steps {
-        sh '''
+        sh '''          
           set -eu
-          kubectl patch svc ${SERVICE_NAME} -n ${K8S_NAMESPACE} \
-            -p "{\"spec\": {\"selector\": {\"app\": \"${APP_NAME}\", \"version\": \"${TARGET_COLOR}\"}}}"
+          kubectl set selector service/${SERVICE_NAME} -n ${K8S_NAMESPACE} app=${APP_NAME},version=${TARGET_COLOR}
+
           echo "Switched ${SERVICE_NAME} selector to version=${TARGET_COLOR}"
         '''
       }
