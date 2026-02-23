@@ -1,26 +1,28 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: nginx
-  namespace: prod-app
+  name: ${APP_NAME}-${COLOR}
+  namespace: ${K8S_NAMESPACE}
 spec:
   replicas: 2
-  strategy: 
-    type: RollingUpdate
-    rollingUpdate:
-      maxUnavailable: 1
-      maxSurge: 1
+  # strategy: 
+  #   type: RollingUpdate
+  #   rollingUpdate:
+  #     maxUnavailable: 1
+  #     maxSurge: 1
   selector:
     matchLabels:
-      app: web-app
+      app: ${APP_NAME}
+      color: green
   template:
     metadata:
       labels:
-        app: web-app
+        app: ${APP_NAME}
+        color: green
     spec:
       containers:
-        - name: nweb
-          image: 608827180555.dkr.ecr.ap-south-1.amazonaws.com/web-app:${IMAGE_TAG}
+        - name: ${APP_NAME}
+          image: ${ECR_REPO}:${IMAGE_TAG}
           ports:
             - containerPort: 80
           resources:

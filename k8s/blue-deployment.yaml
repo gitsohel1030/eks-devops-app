@@ -1,0 +1,47 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ${APP_NAME}-${COLOR}
+  namespace: ${K8S_NAMESPACE}
+spec:
+  replicas: 2
+  # strategy: 
+  #   type: RollingUpdate
+  #   rollingUpdate:
+  #     maxUnavailable: 1
+  #     maxSurge: 1
+  selector:
+    matchLabels:
+      app: ${APP_NAME}
+      color: blue
+  template:
+    metadata:
+      labels:
+        app: ${APP_NAME}
+        color: blue
+    spec:
+      containers:
+        - name: ${APP_NAME}
+          image: ${ECR_REPO}:${IMAGE_TAG}
+          ports:
+            - containerPort: 80
+          resources:
+            requests:
+              cpu: "200m"
+              memory: "128Mi"
+            limits:
+              cpu: "500m"
+              memory: "256Mi"
+
+          livenessProbe:
+            httpGet: 
+              path: /
+              port: 80
+            initialDelaySeconds: 15
+            periodSeconds: 20
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 80
+            initialDelaySeconds: 5
+            periodSeconds: 10

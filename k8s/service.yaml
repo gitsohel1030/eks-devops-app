@@ -1,12 +1,13 @@
 apiVersion: v1
 kind: Service
 metadata: 
-  name: web-service
+  name: ${SERVICE_NAME}
   namespace: prod-app
 spec:
   type: ClusterIP
   selector:
-    app: web-app
+    app: ${APP_NAME}
+    color: blue
   ports:
     # - name: nginx-svc-port
     #   protocol: TCP
