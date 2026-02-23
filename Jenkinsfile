@@ -166,7 +166,7 @@ pipeline {
           sleep 20
 
           # Replace with your actual Ingress/ALB URL
-          STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://k8s-prodapp-webingre-fb76ccc10f-2038335722.ap-south-1.elb.amazonaws.com)
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://k8s-prodapp-webingre-fb76ccc10f-1184307892.ap-south-1.elb.amazonaws.com)
           echo "HTTP Status: ${STATUS}"
 
           if [ "${STATUS}" != "200" ]; then
