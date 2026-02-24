@@ -32,16 +32,6 @@ pipeline {
       steps { checkout scm }
     }
 
-    
-    stage('Ensure Namespace') {
-      steps {
-        sh '''
-          set -eu
-          kubectl get ns ${K8S_NAMESPACE} >/dev/null 2>&1 || kubectl create ns ${K8S_NAMESPACE}
-        '''
-      }
-    }
-
 
     stage('Set IMAGE_TAG (fallback)') {
       when { expression { return !env.IMAGE_TAG || env.IMAGE_TAG.trim() == '' } }
@@ -153,6 +143,17 @@ pipeline {
     //     }
     //   }
     // }
+
+        
+    stage('Ensure Namespace') {
+      steps {
+        sh '''
+          set -eu pipefail
+          kubectl get ns ${K8S_NAMESPACE} >/dev/null 2>&1 || kubectl create ns ${K8S_NAMESPACE}
+        '''
+      }
+    }
+
 
     stage('Apply Services + HPAs') {
       steps {
