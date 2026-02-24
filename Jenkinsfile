@@ -20,7 +20,7 @@ pipeline {
     SERVICE_NAME    = "web-svc"        // the stable Service the ALB/Ingress points to
 
     // CURRENT_COLOR   = "blue"
-    // TARGET_COLOR    = "green"
+    TARGET_COLOR    = "green"
 
     SCALE_DOWN_OLD  = "true"           // set to "false" to keep old color running for quick rollback
 
@@ -31,6 +31,17 @@ pipeline {
     stage('Checkout') {
       steps { checkout scm }
     }
+
+    
+    stage('Ensure Namespace') {
+      steps {
+        sh '''
+          set -eu
+          kubectl get ns ${K8S_NAMESPACE} >/dev/null 2>&1 || kubectl create ns ${K8S_NAMESPACE}
+        '''
+      }
+    }
+
 
     stage('Set IMAGE_TAG (fallback)') {
       when { expression { return !env.IMAGE_TAG || env.IMAGE_TAG.trim() == '' } }
@@ -143,188 +154,121 @@ pipeline {
     //   }
     // }
 
-    stage('Decide Colors (current -> target)') {
+    stage('Apply Services + HPAs') {
       steps {
         sh '''
-          set -eu
-          # Read current color from Service selector; default to 'blue' if not set
-          if kubectl get svc ${SERVICE_NAME} -n ${K8S_NAMESPACE} >/dev/null 2>&1; then
-            CUR=$(kubectl get svc ${SERVICE_NAME} -n ${K8S_NAMESPACE} -o jsonpath="{.spec.selector.color}" 2>/dev/null || true)
-          else
-            CUR=""
-          fi
-          [ -z "${CUR}" ] && CUR="blue"
-          if [ "${CUR}" = "blue" ]; then
-            TAR="green"
-          else
-            TAR="blue"
-          fi
-          echo "CURRENT_COLOR=${CUR}" > .colors.env
-          echo "TARGET_COLOR=${TAR}"  >> .colors.env
-        '''
-        script {
-          def c = readProperties file: '.colors.env'
-          env.CURRENT_COLOR = c['CURRENT_COLOR']
-          env.TARGET_COLOR  = c['TARGET_COLOR']
-          echo "CURRENT_COLOR=${env.CURRENT_COLOR}, TARGET_COLOR=${env.TARGET_COLOR}"
-        }
-      }
-    }
+          set -eu pipefail
+          mkdir -p k8s/rendered
+          # services
+          APP_NAME="${APP_NAME}" K8S_NAMESPACE="${K8S_NAMESPACE}" envsubst < k8s/service-blue.yaml  > k8s/rendered/service-blue.yaml
+          APP_NAME="${APP_NAME}" K8S_NAMESPACE="${K8S_NAMESPACE}" envsubst < k8s/service-green.yaml > k8s/rendered/service-green.yaml
+          kubectl apply -f k8s/rendered/service-blue.yaml
+          kubectl apply -f k8s/rendered/service-green.yaml
 
-    // stage('Update Manifest') {
-    //   when { expression { env.DEPLOY_NEEDED == 'true' } }
-    //   steps {
-    //     sh '''
-    //       set -eu
-    //       IMAGE_TAG="${IMAGE_TAG}" envsubst < k8s/deployment.yaml > k8s/deployment_rendered.yaml
-    //       echo "Rendered: k8s/deployment_rendered.yaml"
-    //     '''
-    //   }
-    // }
-
-    stage('Ensure Namespace') {
-      steps {
-        sh '''
-          set -eu
-          kubectl get ns ${K8S_NAMESPACE} >/dev/null 2>&1 || kubectl create ns ${K8S_NAMESPACE}
+          # hpas (optional)
+          APP_NAME="${APP_NAME}" K8S_NAMESPACE="${K8S_NAMESPACE}" envsubst < k8s/hpa-blue.yaml  > k8s/rendered/hpa-blue.yaml
+          APP_NAME="${APP_NAME}" K8S_NAMESPACE="${K8S_NAMESPACE}" envsubst < k8s/hpa-green.yaml > k8s/rendered/hpa-green.yaml
+          kubectl apply -f k8s/rendered/hpa-blue.yaml
+          kubectl apply -f k8s/rendered/hpa-green.yaml
         '''
       }
     }
 
-    stage('Render Manifests (target color)') {
+    stage('Deploy TARGET color') {
       steps {
         sh '''
-          set -eu
+          set -eu pipefail
+          mkdir -p k8s/rendered
+          if [ "${TARGET_COLOR}" = "green" ]; then
+            APP_NAME="${APP_NAME}" K8S_NAMESPACE="${K8S_NAMESPACE}" ECR_REPO="${ECR_REPO}" IMAGE_TAG="${IMAGE_TAG}" envsubst \
+              < k8s/deploy-green.yaml > k8s/rendered/deploy-green.yaml
+            kubectl apply -f k8s/rendered/deploy-green.yaml
+            kubectl rollout status deployment/${APP_NAME}-green -n ${K8S_NAMESPACE} --timeout=2m
+          else
+            APP_NAME="${APP_NAME}" K8S_NAMESPACE="${K8S_NAMESPACE}" ECR_REPO="${ECR_REPO}" IMAGE_TAG="${IMAGE_TAG}" envsubst \
+              < k8s/blue-deployment.yaml > k8s/rendered/deploy-blue.yaml
+            kubectl apply -f k8s/rendered/deploy-blue.yaml
+            kubectl rollout status deployment/${APP_NAME}-blue -n ${K8S_NAMESPACE} --timeout=2m
+          fi
+        '''
+      }
+    }
+
+    stage('ALB Weighted Shift (Declarative Apply)') {
+      steps {
+        sh '''
+          set -eu pipefail
           mkdir -p k8s/rendered
 
-          # //Pick source deployment file based on TARGET_COLOR
+          # Define weight schedule toward TARGET_COLOR
 
-          SRC_DEPLOY="k8s/${TARGET_COLOR}-deployment.yaml"
+          if [ "${TARGET_COLOR}" = "green" ]; then
+            STEPS="90:10 50:50 0:100"
+          else
+            STEPS="10:90 50:50 100:0"
+          fi
 
-          # //Render deployment (inject image tag, names, namespace)
+          for W in $STEPS; do
+            WB="${W%%:*}"; WG="${W##*:}"
+            echo "Applying weights blue=${WB}, green=${WG}"
 
-          APP_NAME="${APP_NAME}" K8S_NAMESPACE="${K8S_NAMESPACE}" ECR_REPO="${ECR_REPO}" IMAGE_TAG="${IMAGE_TAG}" envsubst \
-            < "${SRC_DEPLOY}" > "k8s/rendered/${TARGET_COLOR}-deployment.yaml"
+            K8S_NAMESPACE="${K8S_NAMESPACE}" WEIGHT_BLUE="${WB}" WEIGHT_GREEN="${WG}" envsubst \
+              < k8s/ingress.yaml > k8s/rendered/ingress.yaml
 
-          # //Render canary service pointing to TARGET_COLOR
+            kubectl apply -f k8s/rendered/ingress.yaml
 
-          APP_NAME="${APP_NAME}" K8S_NAMESPACE="${K8S_NAMESPACE}" SERVICE_NAME="${SERVICE_NAME}" COLOR="${TARGET_COLOR}" envsubst \
-            < k8s/service-canary.yaml > "k8s/rendered/svc-canary-${TARGET_COLOR}.yaml"
+            echo "Waiting 25s for ALB to pick up new weights..."
+            sleep 25
+
+            # Example (once I have the ALB DNS):
+            CODE=$(curl -s -o /dev/null -w "%{http_code}" "http://<your-alb-dns>/" || true)
+            echo "ALB probe -> HTTP ${CODE}"
+          done
         '''
       }
     }
 
-    // stage('Deploy to EKS') {
-    //   when { expression { env.DEPLOY_NEEDED == 'true' } }
-    //   steps { sh 'kubectl apply -f k8s/deployment_rendered.yaml' }
-    // }
 
-    stage('Deploy Target Color & Wait') {
+    stage('Optional: Scale down old color') {
+      when { expression { return true } } // set to false to keep for fast rollback
       steps {
         sh '''
-          set -eu
-          kubectl apply -f k8s/rendered/${TARGET_COLOR}-deployment.yaml
-          kubectl rollout status deployment/${APP_NAME}-${TARGET_COLOR} -n ${K8S_NAMESPACE} --timeout=1m
+          set -eu pipefail
+          if [ "${TARGET_COLOR}" = "green" ]; then
+            kubectl scale deployment/${APP_NAME}-blue -n ${K8S_NAMESPACE} --replicas=0 || true
+          else
+            kubectl scale deployment/${APP_NAME}-green -n ${K8S_NAMESPACE} --replicas=0 || true
+          fi
         '''
-      }
-    }
-
-    // stage('Verify Rollout') {
-    //   when { expression { env.DEPLOY_NEEDED == 'true' } }
-    //   steps {
-    //     timeout(time: 2, unit: 'MINUTES') {
-    //       sh 'kubectl rollout status deployment/${K8S_DEPLOYMENT} -n ${K8S_NAMESPACE}'
-    //     }
-    //   }
-    // }
-
-    stage('Create Canary Service & Health Check (in-cluster)') {
-      steps {
-        sh '''
-          set -eu
-          kubectl apply -f k8s/rendered/svc-canary-${TARGET_COLOR}.yaml
-
-          # Run a short-lived curl pod *inside the cluster* to hit the canary service
-          kubectl delete pod tmp-curl -n ${K8S_NAMESPACE} --ignore-not-found
-          kubectl run tmp-curl -n ${K8S_NAMESPACE} --image=curlimages/curl:8.10.1 --restart=Never --command -- \
-            sh -c 'for i in $(seq 1 10); do code=$(curl -s -o /dev/null -w "%{http_code}" http://${SERVICE_NAME}-canary.${K8S_NAMESPACE}.svc.cluster.local:80/); echo "Try $i -> $code"; [ "$code" = "200" ] && exit 0; sleep 3; done; exit 1'
-        '''
-      }
-    }
-
-    // stage('Health Check') {
-    //   when { expression { env.DEPLOY_NEEDED == 'true' } }
-    //   steps {
-    //     sh '''
-    //       set -eu pipefail
-    //       echo "Waiting for pods to stabilize..."
-    //       sleep 20
-
-    //       # Replace with your actual Ingress/ALB URL
-    //       STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://k8s-prodapp-webingre-fb76ccc10f-1184307892.ap-south-1.elb.amazonaws.com)
-    //       echo "HTTP Status: ${STATUS}"
-
-    //       if [ "${STATUS}" != "200" ]; then
-    //         echo "Health check failed"
-    //         exit 1
-    //       fi
-    //       echo "Health check passed"
-    //     '''
-    //   }
-    // }
-
-    stage('Flip Service Selector to Target Color') {
-      steps {
-        sh '''          
-          set -eu
-          kubectl set selector service/${SERVICE_NAME} -n ${K8S_NAMESPACE} app=${APP_NAME},version=${TARGET_COLOR}
-
-          echo "Switched ${SERVICE_NAME} selector to version=${TARGET_COLOR}"
-        '''
-      }
-    }
-
-    stage('Optional: Scale Down Old Color') {
-      when { expression { env.SCALE_DOWN_OLD == 'true' } }
-      steps {
-        sh '''
-          set -eu
-          # Old color might not exist on first run; ignore if missing
-          kubectl scale deployment/${APP_NAME}-${CURRENT_COLOR} -n ${K8S_NAMESPACE} --replicas=0 || true
-        '''
-      }
-    }
-
-    stage('Cleanup Canary Service') {
-      steps {
-        sh '''
-          set -eu
-          kubectl delete svc ${SERVICE_NAME}-canary -n ${K8S_NAMESPACE} --ignore-not-found
-        '''
-      }
-    }
-
-    stage('Done') {
-      steps {
-        echo "Blue/Green switch complete: ${CURRENT_COLOR} -> ${TARGET_COLOR}"
       }
     }
   }
 
-  post {
+
+post {
     failure {
-      script {
-        echo "Pipeline failed — attempting to keep traffic on CURRENT_COLOR=${env.CURRENT_COLOR}."
-      }
-      // Best-effort: make sure stable service points back to CURRENT_COLOR
-      sh '''set -eu
-        kubectl patch svc ${SERVICE_NAME} -n ${K8S_NAMESPACE} \
-          -p "{\"spec\": {\"selector\": {\"app\": \"${APP_NAME}\", \"version\": \"${CURRENT_COLOR}\"}}}" || true
-        kubectl delete svc ${SERVICE_NAME}-canary -n ${K8S_NAMESPACE} --ignore-not-found || true
+      echo "Pipeline failed; attempting to revert to previous weights (100% old color)."
+      sh '''
+        set -eu pipefail
+
+        mkdir -p k8s/rendered
+        
+        if [ "${TARGET_COLOR}" = "green" ]; then
+          # revert to BLUE=100, GREEN=0
+          WEIGHT_BLUE=100
+          WEIGHT_GREEN=0
+        else
+          # revert to BLUE=0, GREEN=100
+          WEIGHT_BLUE=0
+          WEIGHT_GREEN=100
+        fi
+
+        # Re-render ingress without host/cert
+        K8S_NAMESPACE="${K8S_NAMESPACE}" WEIGHT_BLUE="${WEIGHT_BLUE}" WEIGHT_GREEN="${WEIGHT_GREEN}" envsubst \
+          < k8s/ingress.yaml > k8s/rendered/ingress-revert.yaml
+        kubectl apply -f k8s/rendered/ingress-revert.yaml
       '''
     }
-    success {
-      echo "Blue/Green deployment successful...."
-    }
+    success { echo "ALB-based blue/green rollout complete." }
   }
 }

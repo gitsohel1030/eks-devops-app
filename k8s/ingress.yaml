@@ -1,11 +1,28 @@
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
-  name: web-ingress
+  name: ${APP_NAME}-ingress
   namespace: ${K8S_NAMESPACE}
   annotations:
     alb.ingress.kubernetes.io/scheme: internet-facing
     alb.ingress.kubernetes.io/target-type: ip
+    
+    
+    # Health checks & TG behavior (tune for your app)
+    alb.ingress.kubernetes.io/healthcheck-path: /health
+    alb.ingress.kubernetes.io/healthy-threshold-count: '3'
+    alb.ingress.kubernetes.io/healthcheck-interval-seconds: '10'
+    alb.ingress.kubernetes.io/healthcheck-timeout-seconds: '5'
+    alb.ingress.kubernetes.io/target-group-attributes: >
+      deregistration_delay.timeout_seconds=30,slow_start.duration_seconds=30
+
+    # Weighted forward action: weights provided by CI per step
+    alb.ingress.kubernetes.io/actions.forward-blue-green: >-
+      {"type":"forward","forwardConfig":{"targetGroups":[
+        {"serviceName":"web-svc-blue","servicePort":"80","weight":${WEIGHT_BLUE}},
+        {"serviceName":"web-svc-green","servicePort":"80","weight":${WEIGHT_GREEN}}
+      ]}}
+
 spec:
   ingressClassName: alb
   rules:
@@ -15,6 +32,6 @@ spec:
         pathType: Prefix
         backend:
           service:
-            name: web-service
+            name: forward-blue-green
             port:
-              number: 80
+              name: use-annotation
