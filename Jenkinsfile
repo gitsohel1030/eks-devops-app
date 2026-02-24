@@ -269,6 +269,6 @@ post {
         kubectl apply -f k8s/rendered/ingress-revert.yaml
       '''
     }
-    success { echo "ALB-based blue/green rollout complete." }
+    success { echo "ALB-based blue/green rollout complete...." }
   }
 }
