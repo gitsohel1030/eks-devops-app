@@ -180,16 +180,18 @@ pipeline {
      sh '''
        set -eu pipefail
        mkdir -p k8s/rendered
+      
        if [ "${TARGET_COLOR}" = "green" ]; then
-         APP_NAME="${APP_NAME}" K8S_NAMESPACE="${K8S_NAMESPACE}" ECR_REPO="${ECR_REPO}" IMAGE_TAG="${IMAGE_TAG}" envsubst \
-          < k8s/green-deployment.yaml > k8s/rendered/deploy-green.yaml
-         kubectl apply -f k8s/rendered/deploy-green.yaml
-         kubectl rollout status deployment/${APP_NAME}-green -n ${K8S_NAMESPACE} --timeout=2m
-       else
          APP_NAME="${APP_NAME}" K8S_NAMESPACE="${K8S_NAMESPACE}" ECR_REPO="${ECR_REPO}" IMAGE_TAG="${IMAGE_TAG}" envsubst \
            < k8s/blue-deployment.yaml > k8s/rendered/deploy-blue.yaml
          kubectl apply -f k8s/rendered/deploy-blue.yaml
          kubectl rollout status deployment/${APP_NAME}-blue -n ${K8S_NAMESPACE} --timeout=2m
+
+        else
+         APP_NAME="${APP_NAME}" K8S_NAMESPACE="${K8S_NAMESPACE}" ECR_REPO="${ECR_REPO}" IMAGE_TAG="${IMAGE_TAG}" envsubst \
+          < k8s/green-deployment.yaml > k8s/rendered/deploy-green.yaml
+         kubectl apply -f k8s/rendered/deploy-green.yaml
+         kubectl rollout status deployment/${APP_NAME}-green -n ${K8S_NAMESPACE} --timeout=2m
        fi
      '''
    }
