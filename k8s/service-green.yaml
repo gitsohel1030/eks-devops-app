@@ -5,7 +5,7 @@ metadata:
   namespace: ${K8S_NAMESPACE}
   labels:
     app: ${APP_NAME}
-  annotationa:
+  annotations:
     alb.ingress.kubernetes.io/target-type: ip
 spec:
   type: ClusterIP
