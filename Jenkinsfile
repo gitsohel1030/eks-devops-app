@@ -222,8 +222,8 @@ pipeline {
             sleep 25
 
             # Example (once I have the ALB DNS):
-            # CODE=$(curl -s -o /dev/null -w "%{http_code}" "http://<your-alb-dns>/" || true)
-            # echo "ALB probe -> HTTP ${CODE}"
+            CODE=$(curl -s -o /dev/null -w "%{http_code}" "http://k8s-prodapp-webappin-cd99108c4d-1318376321.ap-south-1.elb.amazonaws.com/" || true)
+            echo "ALB probe -> HTTP ${CODE}"
           done
         '''
       }
