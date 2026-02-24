@@ -7,20 +7,18 @@ pipeline {
     ACCOUNT_ID     = "608827180555"
     REPO_NAME      = "web-app"
     ECR_REPO       = "${ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${REPO_NAME}"
-    // fallback populated in "Set IMAGE_TAG" stage if this doesn't expand as expected
+
     IMAGE_TAG      = "${env.GIT_COMMIT ? env.GIT_COMMIT.take(7) : ''}"
     IMAGE_EXISTS   = "false"
     DEPLOY_NEEDED  = "true"
-    // K8S_NAMESPACE  = "prod-app"
-    // K8S_DEPLOYMENT = "nginx"
+    K8S_NAMESPACE  = "prod-app"
 
     // App/K8s naming
     APP_NAME        = "web-app"          // base name for deployments
-    K8S_NAMESPACE   = "prod-app"
     SERVICE_NAME    = "web-svc"        // the stable Service the ALB/Ingress points to
 
-    // CURRENT_COLOR   = "blue"
-    TARGET_COLOR    = "green"
+    CURRENT_COLOR   = ""
+    TARGET_COLOR    = ""
 
     SCALE_DOWN_OLD  = "true"           // set to "false" to keep old color running for quick rollback
 
@@ -175,27 +173,64 @@ pipeline {
       }
     }
 
-    stage('Deploy TARGET color') {
-   steps {
-     sh '''
-       set -eu pipefail
-       mkdir -p k8s/rendered
-      
-       if [ "${TARGET_COLOR}" = "green" ]; then
-         APP_NAME="${APP_NAME}" K8S_NAMESPACE="${K8S_NAMESPACE}" ECR_REPO="${ECR_REPO}" IMAGE_TAG="${IMAGE_TAG}" envsubst \
-           < k8s/blue-deployment.yaml > k8s/rendered/deploy-blue.yaml
-         kubectl apply -f k8s/rendered/deploy-blue.yaml
-         kubectl rollout status deployment/${APP_NAME}-blue -n ${K8S_NAMESPACE} --timeout=2m
 
-        else
-         APP_NAME="${APP_NAME}" K8S_NAMESPACE="${K8S_NAMESPACE}" ECR_REPO="${ECR_REPO}" IMAGE_TAG="${IMAGE_TAG}" envsubst \
-          < k8s/green-deployment.yaml > k8s/rendered/deploy-green.yaml
-         kubectl apply -f k8s/rendered/deploy-green.yaml
-         kubectl rollout status deployment/${APP_NAME}-green -n ${K8S_NAMESPACE} --timeout=2m
-       fi
-     '''
-   }
- }
+    stage('Determine TARGET color') {
+      steps {
+        script {
+          def activeColor = sh(
+            script: '''
+              set -eu
+
+              # Check ready replicas of blue
+              BLUE=$(kubectl get deploy ${APP_NAME}-blue -n ${K8S_NAMESPACE} -o jsonpath='{.status.readyReplicas}' 2>/dev/null || echo 0)
+              BLUE=${BLUE:-0}
+
+              # Check ready replicas of green
+              GREEN=$(kubectl get deploy ${APP_NAME}-green -n ${K8S_NAMESPACE} -o jsonpath='{.status.readyReplicas}' 2>/dev/null || echo 0)
+              GREEN=${GREEN:-0}
+
+              if [ "$BLUE" -gt 0 ]; then
+                echo blue
+              elif [ "$GREEN" -gt 0 ]; then
+                echo green
+              else
+                # first deployment ever → assume blue is active
+                echo blue
+              fi
+            ''',
+            returnStdout: true
+          ).trim()
+
+          env.CURRENT_COLOR = activeColor
+          env.TARGET_COLOR  = (activeColor == "blue") ? "green" : "blue"
+
+          echo "Active color detected: ${env.CURRENT_COLOR}"
+          echo "Will deploy target color: ${env.TARGET_COLOR}"
+        }
+      }
+    }
+
+    stage('Deploy TARGET color') {
+      steps {
+        sh '''
+          set -eu pipefail
+          mkdir -p k8s/rendered
+          
+          if [ "${TARGET_COLOR}" = "green" ]; then
+            APP_NAME="${APP_NAME}" K8S_NAMESPACE="${K8S_NAMESPACE}" ECR_REPO="${ECR_REPO}" IMAGE_TAG="${IMAGE_TAG}" envsubst \
+              < k8s/blue-deployment.yaml > k8s/rendered/deploy-blue.yaml
+            kubectl apply -f k8s/rendered/deploy-blue.yaml
+            kubectl rollout status deployment/${APP_NAME}-blue -n ${K8S_NAMESPACE} --timeout=2m
+
+            else
+            APP_NAME="${APP_NAME}" K8S_NAMESPACE="${K8S_NAMESPACE}" ECR_REPO="${ECR_REPO}" IMAGE_TAG="${IMAGE_TAG}" envsubst \
+              < k8s/green-deployment.yaml > k8s/rendered/deploy-green.yaml
+            kubectl apply -f k8s/rendered/deploy-green.yaml
+            kubectl rollout status deployment/${APP_NAME}-green -n ${K8S_NAMESPACE} --timeout=2m
+          fi
+        '''
+      }
+    }
 
     stage('ALB Weighted Shift (Declarative Apply)') {
       steps {
