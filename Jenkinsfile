@@ -170,7 +170,7 @@ pipeline {
             # Secret from Jenkins (dont store in Git)
             kubectl create secret generic mysql-secret \
               -n ${K8S_NAMESPACE} \
-              --from-literal=MYSQL_ROOT_PASSWORD="${MYSQL_ROOT_PASSWORD}" \  
+              --from-literal=MYSQL_ROOT_PASSWORD="${MYSQL_ROOT_PASSWORD}" \
               --from-literal=MYSQL_PASSWORD="${MYSQL_PASSWORD}" \
               --dry-run=client -o yaml | kubectl apply -f -
 
