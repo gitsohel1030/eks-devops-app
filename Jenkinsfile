@@ -152,23 +152,56 @@ pipeline {
       }
     }
 
+    stage('Deploy MySQL (dev)') {
+      steps {
+        withCredentials([
+          string(credentialsId: 'mysql-root-password', variable: 'MYSQL_ROOT_PASSWORD'),
+          string(credentialsId: 'mysql-app-password',  variable: 'MYSQL_PASSWORD')
+        ]) {
+          sh '''#!/usr/bin/env bash
+            set -eu pipefail
+
+          
+            # ConfigMap, PVC, Service
+            K8S_NAMESPACE="${K8S_NAMESPACE}" envsubst < k8s/base/db-dev/configmap.yaml | kubectl apply -f -
+            K8S_NAMESPACE="${K8S_NAMESPACE}" envsubst < k8s/base/db-dev/pvc.yaml      | kubectl apply -f -
+            K8S_NAMESPACE="${K8S_NAMESPACE}" envsubst < k8s/base/db-dev/service.yaml  | kubectl apply -f -
+
+            # Secret from Jenkins (dont store in Git)
+            kubectl create secret generic mysql-secret \
+              -n ${K8S_NAMESPACE} \
+              --from-literal=MYSQL_ROOT_PASSWORD="${MYSQL_ROOT_PASSWORD}" \  
+              --from-literal=MYSQL_PASSWORD="${MYSQL_PASSWORD}" \
+              --dry-run=client -o yaml | kubectl apply -f -
+
+            # Deployment + PDB
+            K8S_NAMESPACE="${K8S_NAMESPACE}" envsubst < k8s/base/db-dev/deployment.yaml | kubectl apply -f -
+            K8S_NAMESPACE="${K8S_NAMESPACE}" envsubst < k8s/base/db-dev/pdb.yaml        | kubectl apply -f -
+
+            # Wait until ready
+            kubectl rollout status deploy/mysql -n ${K8S_NAMESPACE} --timeout=3m
+            '''
+        }
+      }
+    }
+
 
     stage('Apply Services + HPAs') {
       steps {
         sh '''
           set -eu pipefail
-          mkdir -p k8s/rendered
+          mkdir -p k8s/base/blue-green/rendered
           # services
-          APP_NAME="${APP_NAME}" K8S_NAMESPACE="${K8S_NAMESPACE}" envsubst < k8s/service-blue.yaml  > k8s/rendered/service-blue.yaml
-          APP_NAME="${APP_NAME}" K8S_NAMESPACE="${K8S_NAMESPACE}" envsubst < k8s/service-green.yaml > k8s/rendered/service-green.yaml
-          kubectl apply -f k8s/rendered/service-blue.yaml
-          kubectl apply -f k8s/rendered/service-green.yaml
+          APP_NAME="${APP_NAME}" K8S_NAMESPACE="${K8S_NAMESPACE}" envsubst < k8s/base/blue-green/service-blue.yaml  > k8s/base/blue-green/rendered/service-blue.yaml
+          APP_NAME="${APP_NAME}" K8S_NAMESPACE="${K8S_NAMESPACE}" envsubst < k8s/base/blue-green/service-green.yaml > k8s/base/blue-green/rendered/service-green.yaml
+          kubectl apply -f k8s/base/blue-green/rendered/service-blue.yaml
+          kubectl apply -f k8s/base/blue-green/rendered/service-green.yaml
 
           # hpas (optional)
-          APP_NAME="${APP_NAME}" K8S_NAMESPACE="${K8S_NAMESPACE}" envsubst < k8s/hpa-blue.yaml  > k8s/rendered/hpa-blue.yaml
-          APP_NAME="${APP_NAME}" K8S_NAMESPACE="${K8S_NAMESPACE}" envsubst < k8s/hpa-green.yaml > k8s/rendered/hpa-green.yaml
-          kubectl apply -f k8s/rendered/hpa-blue.yaml
-          kubectl apply -f k8s/rendered/hpa-green.yaml
+          APP_NAME="${APP_NAME}" K8S_NAMESPACE="${K8S_NAMESPACE}" envsubst < k8s/base/blue-green/hpa-blue.yaml  > k8s/base/blue-green/rendered/hpa-blue.yaml
+          APP_NAME="${APP_NAME}" K8S_NAMESPACE="${K8S_NAMESPACE}" envsubst < k8s/base/blue-green/hpa-green.yaml > k8s/base/blue-green/rendered/hpa-green.yaml
+          kubectl apply -f k8s/base/blue-green/rendered/hpa-blue.yaml
+          kubectl apply -f k8s/base/blue-green/rendered/hpa-green.yaml
         '''
       }
     }
@@ -214,18 +247,18 @@ pipeline {
       steps {
         sh '''
           set -eu pipefail
-          mkdir -p k8s/rendered
+          mkdir -p k8s/base/blue-green/rendered
           
           if [ "${TARGET_COLOR}" = "green" ]; then
             APP_NAME="${APP_NAME}" K8S_NAMESPACE="${K8S_NAMESPACE}" ECR_REPO="${ECR_REPO}" IMAGE_TAG="${IMAGE_TAG}" envsubst \
-              < k8s/blue-deployment.yaml > k8s/rendered/deploy-blue.yaml
-            kubectl apply -f k8s/rendered/deploy-blue.yaml
+              < k8s/base/blue-green/blue-deployment.yaml > k8s/base/blue-green/rendered/deploy-blue.yaml
+            kubectl apply -f k8s/base/blue-green/rendered/deploy-blue.yaml
             kubectl rollout status deployment/${APP_NAME}-blue -n ${K8S_NAMESPACE} --timeout=2m
 
             else
             APP_NAME="${APP_NAME}" K8S_NAMESPACE="${K8S_NAMESPACE}" ECR_REPO="${ECR_REPO}" IMAGE_TAG="${IMAGE_TAG}" envsubst \
-              < k8s/green-deployment.yaml > k8s/rendered/deploy-green.yaml
-            kubectl apply -f k8s/rendered/deploy-green.yaml
+              < k8s/base/blue-green/green-deployment.yaml > k8s/base/blue-green/rendered/deploy-green.yaml
+            kubectl apply -f k8s/base/blue-green/rendered/deploy-green.yaml
             kubectl rollout status deployment/${APP_NAME}-green -n ${K8S_NAMESPACE} --timeout=2m
           fi
         '''
@@ -236,7 +269,7 @@ pipeline {
       steps {
         sh '''
           set -eu pipefail
-          mkdir -p k8s/rendered
+          mkdir -p k8s/base/blue-green/rendered
 
           # Define weight schedule toward TARGET_COLOR
 
@@ -251,17 +284,17 @@ pipeline {
             echo "Applying weights blue=${WB}, green=${WG}"
 
             K8S_NAMESPACE="${K8S_NAMESPACE}" WEIGHT_BLUE="${WB}" WEIGHT_GREEN="${WG}" envsubst \
-              < k8s/ingress.yaml > k8s/rendered/ingress.yaml
+              < k8s/base/blue-green/ingress.yaml > k8s/base/blue-green/rendered/ingress.yaml
 
-            kubectl apply -f k8s/rendered/ingress.yaml
+            kubectl apply -f k8s/base/blue-green/rendered/ingress.yaml
 
-            echo "Waiting 25s for ALB to pick up new weights..."
-            sleep 25
+            #echo "Waiting 25s for ALB to pick up new weights..."
+            #sleep 25
 
             # Example (once I have the ALB DNS):
-            CODE=$(curl -s -o /dev/null -w "%{http_code}" "http://k8s-prodapp-webappin-cd99108c4d-1318376321.ap-south-1.elb.amazonaws.com/" || true)
-            echo "ALB probe -> HTTP ${CODE}"
-          done
+            #CODE=$(curl -s -o /dev/null -w "%{http_code}" "http://k8s-prodapp-webappin-cd99108c4d-1318376321.ap-south-1.elb.amazonaws.com/" || true)
+            #echo "ALB probe -> HTTP ${CODE}"
+          #done
         '''
       }
     }
@@ -289,7 +322,7 @@ post {
       sh '''
         set -eu pipefail
 
-        mkdir -p k8s/rendered
+        mkdir -p k8s/base/blue-green/rendered
         
         if [ "${TARGET_COLOR}" = "green" ]; then
           # revert to BLUE=100, GREEN=0
@@ -303,8 +336,8 @@ post {
 
         # Re-render ingress without host/cert
         K8S_NAMESPACE="${K8S_NAMESPACE}" WEIGHT_BLUE="${WEIGHT_BLUE}" WEIGHT_GREEN="${WEIGHT_GREEN}" envsubst \
-          < k8s/ingress.yaml > k8s/rendered/ingress-revert.yaml
-        kubectl apply -f k8s/rendered/ingress-revert.yaml
+          < k8s/base/blue-green/ingress.yaml > k8s/base/blue-green/rendered/ingress-revert.yaml
+        kubectl apply -f k8s/base/blue-green/rendered/ingress-revert.yaml
       '''
     }
     success { echo "ALB-based blue/green rollout complete...." }
