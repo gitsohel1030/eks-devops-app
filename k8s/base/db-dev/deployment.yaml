@@ -44,15 +44,27 @@ spec:
           env:
             # From Secret (sensitive)
             - name: MYSQL_ROOT_PASSWORD
-              valueFrom: { secretKeyRef: { name: mysql-secret, key: MYSQL_ROOT_PASSWORD } }
+              valueFrom: 
+                secretKeyRef:
+                  name: mysql-secret 
+                  key: MYSQL_ROOT_PASSWORD 
             - name: MYSQL_PASSWORD
-              valueFrom: { secretKeyRef: { name: mysql-secret, key: MYSQL_PASSWORD } }
+              valueFrom:
+                secretKeyRef:
+                  name: mysql-secret
+                  key: MYSQL_PASSWORD
 
             # From ConfigMap (non-sensitive)
             - name: MYSQL_DATABASE
-              valueFrom: { configMapKeyRef: { name: mysql-config, key: MYSQL_DATABASE } }
+              valueFrom:
+                configMapKeyRef:
+                  name: mysql-config
+                  key: MYSQL_DATABASE
             - name: MYSQL_USER
-              valueFrom: { configMapKeyRef: { name: mysql-config, key: MYSQL_USER } }
+              valueFrom:
+                configMapKeyRef:
+                  name: mysql-config
+                  key: MYSQL_USER
 
           volumeMounts:
             - name: mysql-data

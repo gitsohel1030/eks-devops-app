@@ -4,7 +4,7 @@ metadata:
   name: mysql-config
   namespace: ${K8S_NAMESPACE}
 data:
-  kMYSQL_DATABASE: "appdb"
+  MYSQL_DATABASE: "appdb"
   MYSQL_USER: "appuser"
 
   my.cnf: |
