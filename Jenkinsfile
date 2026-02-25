@@ -180,7 +180,7 @@ pipeline {
 
             # Wait until ready
             kubectl rollout status deploy/mysql -n ${K8S_NAMESPACE} --timeout=3m
-            '''
+          '''
         }
       }
     }
