@@ -158,7 +158,7 @@ pipeline {
           string(credentialsId: 'mysql-root-password', variable: 'MYSQL_ROOT_PASSWORD'),
           string(credentialsId: 'mysql-app-password',  variable: 'MYSQL_PASSWORD')
         ]) {
-          sh '''#!/usr/bin/env bash
+          sh '''
             set -eu pipefail
 
           
