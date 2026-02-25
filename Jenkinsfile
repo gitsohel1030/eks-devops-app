@@ -105,42 +105,42 @@ pipeline {
       steps { sh 'aws eks update-kubeconfig --region ${AWS_REGION} --name ${CLUSTER_NAME}' }
     }
 
-    // stage('Check if Deploy Needed') {
-    //   steps {
-    //     sh '''
-    //       set -eu pipefail
+  // stage('Check if Deploy Needed') {
+  //   steps {
+  //     sh '''
+  //       set -eu pipefail
 
-    //       DEPLOY_NEEDED=true
-    //       if kubectl get deployment/${K8S_DEPLOYMENT} -n ${K8S_NAMESPACE} >/dev/null 2>&1; then
-    //         CURRENT_IMAGE=$(kubectl get deployment/${K8S_DEPLOYMENT} -n ${K8S_NAMESPACE} -o jsonpath="{.spec.template.spec.containers[0].image}")
-    //         echo "Current deployment image: ${CURRENT_IMAGE}"
+  //       DEPLOY_NEEDED=true
+  //       if kubectl get deployment/${K8S_DEPLOYMENT} -n ${K8S_NAMESPACE} >/dev/null 2>&1; then
+  //         CURRENT_IMAGE=$(kubectl get deployment/${K8S_DEPLOYMENT} -n ${K8S_NAMESPACE} -o jsonpath="{.spec.template.spec.containers[0].image}")
+  //         echo "Current deployment image: ${CURRENT_IMAGE}"
 
-    //         # Extract tag if present (repo:tag). If digest form, deploy anyway.
-    //         if echo "${CURRENT_IMAGE}" | grep -q ':'; then
-    //           CURRENT_TAG="${CURRENT_IMAGE##*:}"
-    //         else
-    //           CURRENT_TAG=""
-    //         fi
+  //         # Extract tag if present (repo:tag). If digest form, deploy anyway.
+  //         if echo "${CURRENT_IMAGE}" | grep -q ':'; then
+  //           CURRENT_TAG="${CURRENT_IMAGE##*:}"
+  //         else
+  //           CURRENT_TAG=""
+  //         fi
 
-    //         if [ "${CURRENT_TAG}" = "${IMAGE_TAG}" ]; then
-    //           echo "Deployment already at desired tag: ${IMAGE_TAG}"
-    //           DEPLOY_NEEDED=false
-    //         else
-    //           echo "Deployment tag (${CURRENT_TAG}) differs from desired (${IMAGE_TAG})."
-    //         fi
-    //       else
-    //         echo "Deployment ${K8S_DEPLOYMENT} -n ${K8S_NAMESPACE} not found. Will deploy."
-    //       fi
+  //         if [ "${CURRENT_TAG}" = "${IMAGE_TAG}" ]; then
+  //           echo "Deployment already at desired tag: ${IMAGE_TAG}"
+  //           DEPLOY_NEEDED=false
+  //         else
+  //           echo "Deployment tag (${CURRENT_TAG}) differs from desired (${IMAGE_TAG})."
+  //         fi
+  //       else
+  //         echo "Deployment ${K8S_DEPLOYMENT} -n ${K8S_NAMESPACE} not found. Will deploy."
+  //       fi
 
-    //       echo "DEPLOY_NEEDED=${DEPLOY_NEEDED}" > .deploy_needed.env
-    //     '''
-    //     script {
-    //       def p = readProperties file: '.deploy_needed.env'
-    //       env.DEPLOY_NEEDED = p['DEPLOY_NEEDED']
-    //       echo "DEPLOY_NEEDED=${env.DEPLOY_NEEDED}"
-    //     }
-    //   }
-    // }
+  //       echo "DEPLOY_NEEDED=${DEPLOY_NEEDED}" > .deploy_needed.env
+  //     '''
+  //     script {
+  //       def p = readProperties file: '.deploy_needed.env'
+  //       env.DEPLOY_NEEDED = p['DEPLOY_NEEDED']
+  //       echo "DEPLOY_NEEDED=${env.DEPLOY_NEEDED}"
+  //     }
+  //   }
+  // }
 
         
     stage('Ensure Namespace') {
@@ -152,38 +152,38 @@ pipeline {
       }
     }
 
-    stage('Deploy MySQL (dev)') {
-      steps {
-        withCredentials([
-          string(credentialsId: 'mysql-root-password', variable: 'MYSQL_ROOT_PASSWORD'),
-          string(credentialsId: 'mysql-app-password',  variable: 'MYSQL_PASSWORD')
-        ]) {
-          sh '''
-            set -eu pipefail
+    // stage('Deploy MySQL (dev)') {
+    //   steps {
+    //     withCredentials([
+    //       string(credentialsId: 'mysql-root-password', variable: 'MYSQL_ROOT_PASSWORD'),
+    //       string(credentialsId: 'mysql-app-password',  variable: 'MYSQL_PASSWORD')
+    //     ]) {
+    //       sh '''
+    //         set -eu pipefail
 
           
-            # ConfigMap, PVC, Service
-            K8S_NAMESPACE="${K8S_NAMESPACE}" envsubst < k8s/base/db-dev/configmap.yaml | kubectl apply -f -
-            K8S_NAMESPACE="${K8S_NAMESPACE}" envsubst < k8s/base/db-dev/pvc.yaml      | kubectl apply -f -
-            K8S_NAMESPACE="${K8S_NAMESPACE}" envsubst < k8s/base/db-dev/service.yaml  | kubectl apply -f -
+    //         # ConfigMap, PVC, Service
+    //         K8S_NAMESPACE="${K8S_NAMESPACE}" envsubst < k8s/base/db-dev/configmap.yaml | kubectl apply -f -
+    //         K8S_NAMESPACE="${K8S_NAMESPACE}" envsubst < k8s/base/db-dev/pvc.yaml      | kubectl apply -f -
+    //         K8S_NAMESPACE="${K8S_NAMESPACE}" envsubst < k8s/base/db-dev/service.yaml  | kubectl apply -f -
 
-            # Secret from Jenkins (dont store in Git)
-            kubectl create secret generic mysql-secret \
-              -n ${K8S_NAMESPACE} \
-              --from-literal=MYSQL_ROOT_PASSWORD="${MYSQL_ROOT_PASSWORD}" \
-              --from-literal=MYSQL_PASSWORD="${MYSQL_PASSWORD}" \
-              --dry-run=client -o yaml | kubectl apply -f -
+    //         # Secret from Jenkins (dont store in Git)
+    //         kubectl create secret generic mysql-secret \
+    //           -n ${K8S_NAMESPACE} \
+    //           --from-literal=MYSQL_ROOT_PASSWORD="${MYSQL_ROOT_PASSWORD}" \
+    //           --from-literal=MYSQL_PASSWORD="${MYSQL_PASSWORD}" \
+    //           --dry-run=client -o yaml | kubectl apply -f -
 
-            # Deployment + PDB
-            K8S_NAMESPACE="${K8S_NAMESPACE}" envsubst < k8s/base/db-dev/deployment.yaml | kubectl apply -f -
-            K8S_NAMESPACE="${K8S_NAMESPACE}" envsubst < k8s/base/db-dev/pdb.yaml        | kubectl apply -f -
+    //         # Deployment + PDB
+    //         K8S_NAMESPACE="${K8S_NAMESPACE}" envsubst < k8s/base/db-dev/deployment.yaml | kubectl apply -f -
+    //         K8S_NAMESPACE="${K8S_NAMESPACE}" envsubst < k8s/base/db-dev/pdb.yaml        | kubectl apply -f -
 
-            # Wait until ready
-            kubectl rollout status deploy/mysql -n ${K8S_NAMESPACE} --timeout=3m
-          '''
-        }
-      }
-    }
+    //         # Wait until ready
+    //         kubectl rollout status deploy/mysql -n ${K8S_NAMESPACE} --timeout=3m
+    //       '''
+    //     }
+    //   }
+    // }
 
 
     stage('Apply Services + HPAs') {

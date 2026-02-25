@@ -19,7 +19,14 @@ spec:
       labels:
         app: ${APP_NAME}
         version: blue
-    spec:
+    spec:      
+      spec:
+        terminationGracePeriodSeconds: 30
+
+      securityContext:
+        runAsNonRoot: true
+        allowPrivilegeEscalation: false
+        readOnlyRootFilesystem: true
       containers:
         - name: ${APP_NAME}
           image: ${ECR_REPO}:${IMAGE_TAG}
@@ -33,15 +40,19 @@ spec:
               cpu: "500m"
               memory: "256Mi"
 
+          envFrom:
+            - configMapRef:
+                name: ${APP_NAME}-configmap
+
           livenessProbe:
             httpGet: 
-              path: /
+              path: /health
               port: 80
             initialDelaySeconds: 15
             periodSeconds: 20
           readinessProbe:
             httpGet:
-              path: /
+              path: /health
               port: 80
             initialDelaySeconds: 5
             periodSeconds: 10

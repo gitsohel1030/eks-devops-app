@@ -1,12 +1,13 @@
 apiVersion: policy/v1
 kind: PodDisruptionBudget
 metadata:
-  name: mysql-pdb
+  name: ${APP_NAME}-pdb
   namespace: ${K8S_NAMESPACE}
 spec:
   minAvailable: 1
   selector:
     matchLabels:
-      app: mysql
+      app: ${APP_NAME}
+      version: green
 
 
