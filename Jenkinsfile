@@ -105,43 +105,43 @@ pipeline {
       steps { sh 'aws eks update-kubeconfig --region ${AWS_REGION} --name ${CLUSTER_NAME}' }
     }
 
-// DEPRECATED
-  // stage('Check if Deploy Needed') {
-  //   steps {
-  //     sh '''
-  //       set -eu pipefail
+    // DEPRECATED
+      // stage('Check if Deploy Needed') {
+      //   steps {
+      //     sh '''
+      //       set -eu pipefail
 
-  //       DEPLOY_NEEDED=true
-  //       if kubectl get deployment/${K8S_DEPLOYMENT} -n ${K8S_NAMESPACE} >/dev/null 2>&1; then
-  //         CURRENT_IMAGE=$(kubectl get deployment/${K8S_DEPLOYMENT} -n ${K8S_NAMESPACE} -o jsonpath="{.spec.template.spec.containers[0].image}")
-  //         echo "Current deployment image: ${CURRENT_IMAGE}"
+      //       DEPLOY_NEEDED=true
+      //       if kubectl get deployment/${K8S_DEPLOYMENT} -n ${K8S_NAMESPACE} >/dev/null 2>&1; then
+      //         CURRENT_IMAGE=$(kubectl get deployment/${K8S_DEPLOYMENT} -n ${K8S_NAMESPACE} -o jsonpath="{.spec.template.spec.containers[0].image}")
+      //         echo "Current deployment image: ${CURRENT_IMAGE}"
 
-  //         # Extract tag if present (repo:tag). If digest form, deploy anyway.
-  //         if echo "${CURRENT_IMAGE}" | grep -q ':'; then
-  //           CURRENT_TAG="${CURRENT_IMAGE##*:}"
-  //         else
-  //           CURRENT_TAG=""
-  //         fi
+      //         # Extract tag if present (repo:tag). If digest form, deploy anyway.
+      //         if echo "${CURRENT_IMAGE}" | grep -q ':'; then
+      //           CURRENT_TAG="${CURRENT_IMAGE##*:}"
+      //         else
+      //           CURRENT_TAG=""
+      //         fi
 
-  //         if [ "${CURRENT_TAG}" = "${IMAGE_TAG}" ]; then
-  //           echo "Deployment already at desired tag: ${IMAGE_TAG}"
-  //           DEPLOY_NEEDED=false
-  //         else
-  //           echo "Deployment tag (${CURRENT_TAG}) differs from desired (${IMAGE_TAG})."
-  //         fi
-  //       else
-  //         echo "Deployment ${K8S_DEPLOYMENT} -n ${K8S_NAMESPACE} not found. Will deploy."
-  //       fi
+      //         if [ "${CURRENT_TAG}" = "${IMAGE_TAG}" ]; then
+      //           echo "Deployment already at desired tag: ${IMAGE_TAG}"
+      //           DEPLOY_NEEDED=false
+      //         else
+      //           echo "Deployment tag (${CURRENT_TAG}) differs from desired (${IMAGE_TAG})."
+      //         fi
+      //       else
+      //         echo "Deployment ${K8S_DEPLOYMENT} -n ${K8S_NAMESPACE} not found. Will deploy."
+      //       fi
 
-  //       echo "DEPLOY_NEEDED=${DEPLOY_NEEDED}" > .deploy_needed.env
-  //     '''
-  //     script {
-  //       def p = readProperties file: '.deploy_needed.env'
-  //       env.DEPLOY_NEEDED = p['DEPLOY_NEEDED']
-  //       echo "DEPLOY_NEEDED=${env.DEPLOY_NEEDED}"
-  //     }
-  //   }
-  // }
+      //       echo "DEPLOY_NEEDED=${DEPLOY_NEEDED}" > .deploy_needed.env
+      //     '''
+      //     script {
+      //       def p = readProperties file: '.deploy_needed.env'
+      //       env.DEPLOY_NEEDED = p['DEPLOY_NEEDED']
+      //       echo "DEPLOY_NEEDED=${env.DEPLOY_NEEDED}"
+      //     }
+      //   }
+      // }
 
         
     stage('Ensure Namespace') {
@@ -259,31 +259,38 @@ pipeline {
             # Select the correct image patch for TARGET_COLOR
             # kustomization.yaml in overlay includes patch-blue-image.yaml by default.
             if [ "${TARGET_COLOR}" = "green" ]; then
-            # flip to patch-green-image.yaml
-            sed -i 's|patch-blue-image.yaml|patch-green-image.yaml|' "${OUT}/kustomization.yaml"
+
+              # flip to patch-green-image.yaml
+              sed -i 's|patch-blue-image.yaml|patch-green-image.yaml|' "${OUT}/kustomization.yaml"
+              PATCH_FILE="${OUT}/patch-green-image.yaml"
+
+            else
+              # leave it default
+              PATCH_FILE="${OUT}/patch-blue-image.yaml"
+
             fi
 
-            # Stamp the image tag placeholder in the selected patch
-            sed -i "s|__IMAGE_TAG__|${IMAGE_TAG}|g" "${OUT}"/patch-*.yaml || true
+              # Stamp the image tag placeholder in the selected patch
+              sed -i "s|__IMAGE_TAG__|${IMAGE_TAG}|g" "${PATCH_FILE}" || true
 
-            echo "=== Kustomize build (preview) ==="
-            kubectl kustomize "${OUT}" | head -n 200
+              echo "=== Kustomize build (preview) ==="
+              kubectl kustomize "${OUT}" | head -n 200
 
-            echo "=== Diff against cluster (informational) ==="
-            kubectl diff -k "${OUT}" || true
+              echo "=== Diff against cluster informational ==="
+              kubectl diff -k "${OUT}" || true
 
-            echo "=== Apply overlay ==="
-            kubectl apply -k "${OUT}"
+              echo "=== Apply overlay ==="
+              kubectl apply -k "${OUT}"
 
-            echo "=== Wait for TARGET rollout ==="
-            kubectl rollout status deploy/${APP_NAME}-${TARGET_COLOR} -n ${K8S_NAMESPACE} --timeout=3m
+              echo "=== Wait for TARGET rollout ==="
+              kubectl rollout status deploy/${APP_NAME}-${TARGET_COLOR} -n ${K8S_NAMESPACE} --timeout=2m
 
-            # Optional: mark change cause on the deployment
-            kubectl annotate deploy/${APP_NAME}-${TARGET_COLOR} \
-            -n ${K8S_NAMESPACE} kubernetes.io/change-cause="Deploy ${IMAGE_TAG} to ${TARGET_COLOR}" --overwrite
+              # Optional: mark change cause on the deployment
+              kubectl annotate deploy/${APP_NAME}-${TARGET_COLOR} \
+              -n ${K8S_NAMESPACE} kubernetes.io/change-cause="Deploy ${IMAGE_TAG} to ${TARGET_COLOR}" --overwrite
 
-            echo "=== Pods (post-deploy) ==="
-            kubectl get pods -n ${K8S_NAMESPACE} -l app=${APP_NAME} -o wide
+              echo "=== Pods (post-deploy) ==="
+              kubectl get pods -n ${K8S_NAMESPACE} -l app=${APP_NAME} -o wide
         '''
       }
     }
@@ -301,11 +308,11 @@ pipeline {
     }
 
 
-    stage('Optional: Scale down old color') {
-      when { expression { return true } } // set to false to keep for fast rollback
+    
+    stage('Optional: Scale down OLD color') {
+      when { expression { return env.SCALE_DOWN_OLD == 'true' } }
       steps {
-        sh '''
-          set -eu pipefail
+        sh '''#!/usr/bin/env bash -euo pipefail
           if [ "${TARGET_COLOR}" = "green" ]; then
             kubectl scale deployment/${APP_NAME}-blue -n ${K8S_NAMESPACE} --replicas=0 || true
           else
@@ -316,31 +323,32 @@ pipeline {
     }
   }
 
-
-post {
+  post {
     failure {
-      echo "Pipeline failed; attempting to revert to previous weights (100% old color)."
-      sh '''
-        set -eu pipefail
+      echo "Pipeline failed. Printing diagnostics…"
+      sh '''#!/usr/bin/env bash -euo pipefail
 
-        mkdir -p k8s/base/blue-green/rendered
-        
-        if [ "${TARGET_COLOR}" = "green" ]; then
-          # revert to BLUE=100, GREEN=0
-          WEIGHT_BLUE=100
-          WEIGHT_GREEN=0
-        else
-          # revert to BLUE=0, GREEN=100
-          WEIGHT_BLUE=0
-          WEIGHT_GREEN=100
+        echo "----- Deploy diagnostics -----"
+
+        kubectl get deploy -n ${K8S_NAMESPACE} -l app=${APP_NAME} -o wide || true
+        kubectl describe deploy/${APP_NAME}-${TARGET_COLOR} -n ${K8S_NAMESPACE} || true
+
+        POD="$(kubectl get pod -n ${K8S_NAMESPACE} -l app=${APP_NAME},version=${TARGET_COLOR} -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || true)"
+
+        if [ -n "${POD:-}" ]; then
+          kubectl describe pod/${POD} -n ${K8S_NAMESPACE} || true
+          kubectl logs ${POD} -n ${K8S_NAMESPACE} --tail=200 || true
         fi
-
-        # Re-render ingress without host/cert
-        K8S_NAMESPACE="${K8S_NAMESPACE}" WEIGHT_BLUE="${WEIGHT_BLUE}" WEIGHT_GREEN="${WEIGHT_GREEN}" envsubst \
-          < k8s/base/blue-green/ingress.yaml > k8s/base/blue-green/rendered/ingress-revert.yaml
-        kubectl apply -f k8s/base/blue-green/rendered/ingress-revert.yaml
+          echo "----- Recent events -----"
+          kubectl get events -n ${K8S_NAMESPACE} --sort-by=.lastTimestamp | tail -n 100 || true
+          echo "----- Ingress annotation (weights) -----"
+          kubectl get ing/${APP_NAME}-ingress -n ${K8S_NAMESPACE} -o jsonpath='{.metadata.annotations.alb\.ingress\.kubernetes\.io/actions\.forward-blue-green}' || true
+          echo
+          echo "Note: Traffic weights are commit-driven via traffic-patch.yaml. Revert in Git to roll back weights."
       '''
     }
-    success { echo "ALB-based blue/green rollout complete..." }
+    success {
+      echo "Kustomize-based blue/green rollout complete. Target color: ${TARGET_COLOR}, Image: ${IMAGE_TAG}."
+    }
   }
 }
