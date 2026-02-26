@@ -105,6 +105,7 @@ pipeline {
       steps { sh 'aws eks update-kubeconfig --region ${AWS_REGION} --name ${CLUSTER_NAME}' }
     }
 
+// DEPRECATED
   // stage('Check if Deploy Needed') {
   //   steps {
   //     sh '''
@@ -243,58 +244,58 @@ pipeline {
       }
     }
 
-    stage('Deploy TARGET color') {
+    stage('Build & Apply Kustomize Overlay (commit-driven weights)') {
       steps {
-        sh '''
-          set -eu pipefail
-          mkdir -p k8s/base/blue-green/rendered
-          
-          if [ "${TARGET_COLOR}" = "green" ]; then
-            APP_NAME="${APP_NAME}" K8S_NAMESPACE="${K8S_NAMESPACE}" ECR_REPO="${ECR_REPO}" IMAGE_TAG="${IMAGE_TAG}" envsubst \
-              < k8s/base/blue-green/blue-deployment.yaml > k8s/base/blue-green/rendered/deploy-blue.yaml
-            kubectl apply -f k8s/base/blue-green/rendered/deploy-blue.yaml
-            kubectl rollout status deployment/${APP_NAME}-blue -n ${K8S_NAMESPACE} --timeout=2m
+        sh '''#!/usr/bin/env bash -euo pipefail
+            set -x
 
-            else
-            APP_NAME="${APP_NAME}" K8S_NAMESPACE="${K8S_NAMESPACE}" ECR_REPO="${ECR_REPO}" IMAGE_TAG="${IMAGE_TAG}" envsubst \
-              < k8s/base/blue-green/green-deployment.yaml > k8s/base/blue-green/rendered/deploy-green.yaml
-            kubectl apply -f k8s/base/blue-green/rendered/deploy-green.yaml
-            kubectl rollout status deployment/${APP_NAME}-green -n ${K8S_NAMESPACE} --timeout=2m
-          fi
+            OUT="k8s/.out/prod"
+            rm -rf "${OUT}"
+            mkdir -p "${OUT}"
+
+            # Copy overlay to a working dir we can mutate
+            cp -R k8s/overlays/prod/* "${OUT}/"
+
+            # Select the correct image patch for TARGET_COLOR
+            # kustomization.yaml in overlay includes patch-blue-image.yaml by default.
+            if [ "${TARGET_COLOR}" = "green" ]; then
+            # flip to patch-green-image.yaml
+            sed -i 's|patch-blue-image.yaml|patch-green-image.yaml|' "${OUT}/kustomization.yaml"
+            fi
+
+            # Stamp the image tag placeholder in the selected patch
+            sed -i "s|__IMAGE_TAG__|${IMAGE_TAG}|g" "${OUT}"/patch-*.yaml || true
+
+            echo "=== Kustomize build (preview) ==="
+            kubectl kustomize "${OUT}" | head -n 200
+
+            echo "=== Diff against cluster (informational) ==="
+            kubectl diff -k "${OUT}" || true
+
+            echo "=== Apply overlay ==="
+            kubectl apply -k "${OUT}"
+
+            echo "=== Wait for TARGET rollout ==="
+            kubectl rollout status deploy/${APP_NAME}-${TARGET_COLOR} -n ${K8S_NAMESPACE} --timeout=3m
+
+            # Optional: mark change cause on the deployment
+            kubectl annotate deploy/${APP_NAME}-${TARGET_COLOR} \
+            -n ${K8S_NAMESPACE} kubernetes.io/change-cause="Deploy ${IMAGE_TAG} to ${TARGET_COLOR}" --overwrite
+
+            echo "=== Pods (post-deploy) ==="
+            kubectl get pods -n ${K8S_NAMESPACE} -l app=${APP_NAME} -o wide
         '''
       }
     }
 
-    stage('ALB Weighted Shift (Declarative Apply)') {
+    stage('Show Traffic Weights (from Git overlay)') {
       steps {
-        sh '''
-          set -eu pipefail
-          mkdir -p k8s/base/blue-green/rendered
-
-          # Define weight schedule toward TARGET_COLOR
-
-          if [ "${TARGET_COLOR}" = "green" ]; then
-            STEPS="90:10 50:50 0:100"
-          else
-            STEPS="10:90 50:50 100:0"
-          fi
-
-          for W in $STEPS; do
-            WB="${W%%:*}"; WG="${W##*:}"
-            echo "Applying weights blue=${WB}, green=${WG}"
-
-            K8S_NAMESPACE="${K8S_NAMESPACE}" WEIGHT_BLUE="${WB}" WEIGHT_GREEN="${WG}" envsubst \
-              < k8s/base/blue-green/ingress.yaml > k8s/base/blue-green/rendered/ingress.yaml
-
-            kubectl apply -f k8s/base/blue-green/rendered/ingress.yaml
-
-            #echo "Waiting 25s for ALB to pick up new weights..."
-            #sleep 25
-
-            # Example (once I have the ALB DNS):
-            #CODE=$(curl -s -o /dev/null -w "%{http_code}" "http://k8s-prodapp-webappin-cd99108c4d-1318376321.ap-south-1.elb.amazonaws.com/" || true)
-            #echo "ALB probe -> HTTP ${CODE}"
-          #done
+        sh '''#!/usr/bin/env bash -euo pipefail
+            set -x
+            ING="${APP_NAME}-ingress"
+            # Read the forward action annotation from the live Ingress (commit-driven)
+            ANN=$(kubectl get ing/${ING} -n ${K8S_NAMESPACE} -o jsonpath='{.metadata.annotations.alb\.ingress\.kubernetes\.io/actions\.forward-blue-green}' || true)
+            echo "Current ALB forward weights (live): ${ANN}"
         '''
       }
     }

@@ -16,13 +16,6 @@ metadata:
     alb.ingress.kubernetes.io/target-group-attributes: >
       deregistration_delay.timeout_seconds=30,slow_start.duration_seconds=30
 
-    # Weighted forward action: weights provided by CI per step
-    alb.ingress.kubernetes.io/actions.forward-blue-green: >-
-      {"type":"forward","forwardConfig":{"targetGroups":[
-        {"serviceName":"web-svc-blue","servicePort":"80","weight":${WEIGHT_BLUE}},
-        {"serviceName":"web-svc-green","servicePort":"80","weight":${WEIGHT_GREEN}}
-      ]}}
-
 spec:
   ingressClassName: alb
   rules:

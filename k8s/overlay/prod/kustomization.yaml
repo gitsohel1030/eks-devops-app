@@ -1,0 +1,16 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - ../../base
+  - namespace.yaml
+  - configmap.yaml
+  - hpa-blue.yaml
+  - hpa-green.yaml
+  - pdb-blue.yaml
+  - pdb-green.yaml
+
+patchesStrategicMerge:
+  - traffic-patch.yaml
+
+  - patch-blue-image.yaml
