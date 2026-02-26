@@ -301,7 +301,7 @@ pipeline {
             set -x
             ING="${APP_NAME}-ingress"
             # Read the forward action annotation from the live Ingress (commit-driven)
-            ANN=$(kubectl get ing/${ING} -n ${K8S_NAMESPACE} -o jsonpath='{".metadata.annotations.alb\.ingress\.kubernetes\.io/actions\.forward-blue-green"}' || true)
+            ANN=$(kubectl get ing/${ING} -n ${K8S_NAMESPACE} -o jsonpath="{.metadata.annotations.alb\.ingress\.kubernetes\.io/actions\.forward-blue-green}" || true)
             echo "Current ALB forward weights (live): ${ANN}"
         '''
       }
