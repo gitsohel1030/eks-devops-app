@@ -342,7 +342,7 @@ pipeline {
           echo "----- Recent events -----"
           kubectl get events -n ${K8S_NAMESPACE} --sort-by=.lastTimestamp | tail -n 100 || true
           echo "----- Ingress annotation (weights) -----"
-          kubectl get ing/${APP_NAME}-ingress -n ${K8S_NAMESPACE} -o jsonpath='{.metadata.annotations.alb\.ingress\.kubernetes\.io/actions\.forward-blue-green}' || true
+          kubectl get ing/${APP_NAME}-ingress -n ${K8S_NAMESPACE} -o jsonpath="{.metadata.annotations.alb\\.ingress\\.kubernetes\\.io/actions\\.forward-blue-green}" || true
           echo
           echo "Note: Traffic weights are commit-driven via traffic-patch.yaml. Revert in Git to roll back weights."
       '''
