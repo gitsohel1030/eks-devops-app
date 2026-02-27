@@ -187,25 +187,25 @@ pipeline {
     // }
 
 
-    stage('Apply Services + HPAs') {
-      steps {
-        sh '''
-          set -eu pipefail
-          mkdir -p k8s/base/blue-green/rendered
-          # services
-          APP_NAME="${APP_NAME}" K8S_NAMESPACE="${K8S_NAMESPACE}" envsubst < k8s/base/blue-green/service-blue.yaml  > k8s/base/blue-green/rendered/service-blue.yaml
-          APP_NAME="${APP_NAME}" K8S_NAMESPACE="${K8S_NAMESPACE}" envsubst < k8s/base/blue-green/service-green.yaml > k8s/base/blue-green/rendered/service-green.yaml
-          kubectl apply -f k8s/base/blue-green/rendered/service-blue.yaml
-          kubectl apply -f k8s/base/blue-green/rendered/service-green.yaml
+    // stage('Apply Services + HPAs') {
+    //   steps {
+    //     sh '''
+    //       set -eu pipefail
+    //       mkdir -p k8s/base/blue-green/rendered
+    //       # services
+    //       APP_NAME="${APP_NAME}" K8S_NAMESPACE="${K8S_NAMESPACE}" envsubst < k8s/base/service-blue.yaml  > k8s/base/blue-green/rendered/service-blue.yaml
+    //       APP_NAME="${APP_NAME}" K8S_NAMESPACE="${K8S_NAMESPACE}" envsubst < k8s/base/service-green.yaml > k8s/base/blue-green/rendered/service-green.yaml
+    //       kubectl apply -f k8s/base/blue-green/rendered/service-blue.yaml
+    //       kubectl apply -f k8s/base/blue-green/rendered/service-green.yaml
 
-          # hpas (optional)
-          APP_NAME="${APP_NAME}" K8S_NAMESPACE="${K8S_NAMESPACE}" envsubst < k8s/base/blue-green/hpa-blue.yaml  > k8s/base/blue-green/rendered/hpa-blue.yaml
-          APP_NAME="${APP_NAME}" K8S_NAMESPACE="${K8S_NAMESPACE}" envsubst < k8s/base/blue-green/hpa-green.yaml > k8s/base/blue-green/rendered/hpa-green.yaml
-          kubectl apply -f k8s/base/blue-green/rendered/hpa-blue.yaml
-          kubectl apply -f k8s/base/blue-green/rendered/hpa-green.yaml
-        '''
-      }
-    }
+    //       # hpas (optional)
+    //       APP_NAME="${APP_NAME}" K8S_NAMESPACE="${K8S_NAMESPACE}" envsubst < k8s/base/blue-green/hpa-blue.yaml  > k8s/base/blue-green/rendered/hpa-blue.yaml
+    //       APP_NAME="${APP_NAME}" K8S_NAMESPACE="${K8S_NAMESPACE}" envsubst < k8s/base/blue-green/hpa-green.yaml > k8s/base/blue-green/rendered/hpa-green.yaml
+    //       kubectl apply -f k8s/base/blue-green/rendered/hpa-blue.yaml
+    //       kubectl apply -f k8s/base/blue-green/rendered/hpa-green.yaml
+    //     '''
+    //   }
+    // }
 
 
     stage('Determine TARGET color') {
