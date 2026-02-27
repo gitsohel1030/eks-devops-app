@@ -239,7 +239,7 @@ pipeline {
             env.CURRENT_COLOR = "green"
             env.TARGET_COLOR  = "blue"
           } else {
-            active == none //(first deploy)
+            active = "none" //(first deploy)
             env.CURRENT_COLOR = "none"
             env.TARGET_COLOR  = "blue"
           }
