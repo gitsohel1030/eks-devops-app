@@ -261,6 +261,34 @@ pipeline {
             # Copy overlay to a working dir we can mutate
             cp -R k8s/overlays/prod/* "${OUT}/"
 
+            
+            # Load computed colors if available
+            if [[ -f .colors.env ]]; then
+              set -a
+              source ./.colors.env
+              set +a
+            fi
+
+            # Fallback: compute if still missing (first run / env loss)
+            if [[ -z "${TARGET_COLOR:-}" ]]; then
+
+              BLUE=$(kubectl get deploy "${APP_NAME}-blue" -n "${K8S_NAMESPACE}" -o jsonpath='{.status.readyReplicas}' 2>/dev/null || echo 0); BLUE=${BLUE:-0}
+              GREEN=$(kubectl get deploy "${APP_NAME}-green" -n "${K8S_NAMESPACE}" -o jsonpath='{.status.readyReplicas}' 2>/dev/null || echo 0); GREEN=${GREEN:-0}
+
+              if [[ "$BLUE" -gt 0 ]]; then
+                CURRENT_COLOR="blue"; TARGET_COLOR="green"
+              elif [[ "$GREEN" -gt 0 ]]; then
+                CURRENT_COLOR="green"; TARGET_COLOR="blue"
+              else
+                CURRENT_COLOR="none"; TARGET_COLOR="blue"
+              fi
+              printf "CURRENT_COLOR=%s\nTARGET_COLOR=%s\n" "$CURRENT_COLOR" "$TARGET_COLOR" > .colors.env
+            fi
+
+            # Choose correct patch by TARGET_COLOR
+            PATCH_FILE="${OUT}/patch-blue-image.yaml
+
+
             # Select the correct image patch for TARGET_COLOR
             # kustomization.yaml in overlay includes patch-blue-image.yaml by default.
             if [ "${TARGET_COLOR}" = "green" ]; then
