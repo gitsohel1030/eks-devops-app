@@ -3,7 +3,7 @@ pipeline {
 
   environment {
     AWS_REGION     = "ap-south-1"
-    CLUSTER_NAME   = "my-eks-cluster"
+    CLUSTER_NAME   = "my-eks-cluster-1030"
     ACCOUNT_ID     = "608827180555"
     REPO_NAME      = "web-app"
     ECR_REPO       = "${ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${REPO_NAME}"
