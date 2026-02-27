@@ -10,7 +10,20 @@ resources:
   - pdb-blue.yaml
   - pdb-green.yaml
 
-patchesStrategicMerge:
-  - traffic-patch.yaml
 
-  - patch-blue-image.yaml
+labels:
+  - includeSelectors: false
+    pairs:
+      app.kubernetes.io/part-of: web-app
+
+
+patches:
+  - path: patch-blue-image.yaml
+
+  - target:
+      group: networking.k8s.io
+      version: v1
+      kind: Ingress
+      name: web-app-ingress
+      namespace: prod-app
+    path: traffic-patch.yaml
