@@ -213,7 +213,7 @@ pipeline {
         script {
           def activeColor = sh(
             script: '''
-              set -eu
+              set -eu pipefail
 
               # Check ready replicas of blue
               BLUE=$(kubectl get deploy ${APP_NAME}-blue -n ${K8S_NAMESPACE} -o jsonpath='{.status.readyReplicas}' 2>/dev/null || echo 0)
@@ -246,8 +246,7 @@ pipeline {
 
     stage('Build & Apply Kustomize Overlay (commit-driven weights)') {
       steps {
-        sh '''#!/usr/bin/env bash -euo pipefail
-            set -x
+        sh '''set -euo pipefail
 
             OUT="k8s/.out/prod"
             rm -rf "${OUT}"
@@ -297,8 +296,8 @@ pipeline {
 
     stage('Show Traffic Weights (from Git overlay)') {
       steps {
-        sh '''#!/usr/bin/env bash -euo pipefail
-            set -x
+        sh '''set -euo pipefail
+        
             ING="${APP_NAME}-ingress"
             # Read the forward action annotation from the live Ingress (commit-driven)
             ANN=$(kubectl get ing/${ING} -n ${K8S_NAMESPACE} -o jsonpath="{.metadata.annotations.alb\\.ingress\\.kubernetes\\.io/actions\\.forward-blue-green}" || true)
