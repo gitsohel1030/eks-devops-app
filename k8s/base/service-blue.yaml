@@ -1,16 +1,16 @@
 apiVersion: v1
 kind: Service
 metadata: 
-  name: ${SERVICE_NAME}-blue
-  namespace: ${K8S_NAMESPACE}
+  name: web-svc-blue
+  namespace: prod-app
   labels:
-    app: ${APP_NAME}
+    app: web-app
   annotations:
     alb.ingress.kubernetes.io/target-type: ip
 spec:
   type: ClusterIP
   selector:
-    app: ${APP_NAME}
+    app: web-app
     version: blue
   ports:
     - name: http
