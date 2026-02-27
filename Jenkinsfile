@@ -211,35 +211,38 @@ pipeline {
     stage('Determine TARGET color') {
       steps {
         script {
-          def activeColor = sh(
+          def active = sh(
             script: '''
               set -eu pipefail
 
-              # Check ready replicas of blue
               BLUE=$(kubectl get deploy ${APP_NAME}-blue -n ${K8S_NAMESPACE} -o jsonpath='{.status.readyReplicas}' 2>/dev/null || echo 0)
-              BLUE=${BLUE:-0}
-
-              # Check ready replicas of green
               GREEN=$(kubectl get deploy ${APP_NAME}-green -n ${K8S_NAMESPACE} -o jsonpath='{.status.readyReplicas}' 2>/dev/null || echo 0)
-              GREEN=${GREEN:-0}
 
               if [ "$BLUE" -gt 0 ]; then
                 echo blue
               elif [ "$GREEN" -gt 0 ]; then
                 echo green
               else
-                # first deployment ever → assume blue is active
-                echo blue
+                # First deployment ever → deploy blue first
+                echo none
               fi
             ''',
             returnStdout: true
           ).trim()
 
-          env.CURRENT_COLOR = activeColor
-          env.TARGET_COLOR  = (activeColor == "blue") ? "green" : "blue"
+          if (active == "blue") {
+            env.CURRENT_COLOR = "blue"
+            env.TARGET_COLOR  = "green"
+          } else if (active == "green") {
+            env.CURRENT_COLOR = "green"
+            env.TARGET_COLOR  = "blue"
+          } else {
+            env.CURRENT_COLOR = "none"
+            env.TARGET_COLOR  = "blue"
+          }
 
-          echo "Active color detected: ${env.CURRENT_COLOR}"
-          echo "Will deploy target color: ${env.TARGET_COLOR}"
+          echo "Active Color: ${env.CURRENT_COLOR}"
+          echo "Target Color: ${env.TARGET_COLOR}"
         }
       }
     }
