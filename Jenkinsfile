@@ -246,7 +246,7 @@ pipeline {
 
     stage('Build & Apply Kustomize Overlay (commit-driven weights)') {
       steps {
-        sh '''set -euo pipefail
+        sh '''set -eu pipefail
 
             OUT="k8s/.out/prod"
             rm -rf "${OUT}"
@@ -296,8 +296,8 @@ pipeline {
 
     stage('Show Traffic Weights (from Git overlay)') {
       steps {
-        sh '''set -euo pipefail
-        
+        sh '''set -eu pipefail
+
             ING="${APP_NAME}-ingress"
             # Read the forward action annotation from the live Ingress (commit-driven)
             ANN=$(kubectl get ing/${ING} -n ${K8S_NAMESPACE} -o jsonpath="{.metadata.annotations.alb\\.ingress\\.kubernetes\\.io/actions\\.forward-blue-green}" || true)
