@@ -348,7 +348,7 @@ pipeline {
       '''
     }
     success {
-      echo "Kustomize-based blue/green rollout complete. Target color: ${TARGET_COLOR}, Image: ${IMAGE_TAG}...."
+      echo "Kustomize-based blue/green rollout complete. Target color: ${TARGET_COLOR}, Image: ${IMAGE_TAG}.."
     }
   }
 }
