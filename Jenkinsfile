@@ -214,16 +214,14 @@ pipeline {
                 def blueReady = sh(
                     returnStdout: true,
                     script: """
-                        kubectl get deploy ${APP_NAME}-blue -n ${K8S_NAMESPACE} \ 
-                        -o jsonpath='{.status.readyReplicas}' 2>/dev/null || true
+                        kubectl get deploy ${APP_NAME}-blue -n ${K8S_NAMESPACE} -o jsonpath='{.status.readyReplicas}' 2>/dev/null || true
                     """.trim()
                 ).trim()
     
                 def greenReady = sh(
                     returnStdout: true,
                     script: """
-                        kubectl get deploy ${APP_NAME}-green -n ${K8S_NAMESPACE} \                         
-                        -o jsonpath='{.status.readyReplicas}' 2>/dev/null || true
+                        kubectl get deploy ${APP_NAME}-green -n ${K8S_NAMESPACE} -o jsonpath='{.status.readyReplicas}' 2>/dev/null || true
                     """.trim()
                 ).trim()
     
