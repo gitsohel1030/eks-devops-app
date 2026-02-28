@@ -241,8 +241,8 @@ pipeline {
               def colors = readProperties file: '.colors.env'
               env.CURRENT_COLOR = colors['CURRENT_COLOR']
               env.TARGET_COLOR  = colors['TARGET_COLOR']
-              echo "Active Color : ${env.CURRENT_COLOR}"
-              echo "Target Color : ${env.TARGET_COLOR}"
+              echo "Active Color : \${env.CURRENT_COLOR}"
+              echo "Target Color : \${env.TARGET_COLOR}"
           }
       }
     }
