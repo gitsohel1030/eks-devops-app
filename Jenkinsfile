@@ -210,51 +210,46 @@ pipeline {
 
     stage('Determine TARGET color') {
       steps {
-        sh '''
-            set -eu pipefail
-            BLUE=$(kubectl get deploy web-app-blue  -n prod-app -o jsonpath="{.status.readyReplicas}" 2>/dev/null || echo "0")
-            GREEN=$(kubectl get deploy web-app-green -n prod-app -o jsonpath="{.status.readyReplicas}" 2>/dev/null || echo "0")
-            BLUE=${BLUE:-0}
-            GREEN=${GREEN:-0}
-
-            echo "[detect] ready: blue=${BLUE}, green=${GREEN}"
-
-            if [ "${BLUE}" -gt 0 ] && [ "${GREEN}" -eq 0 ]; then
-                echo "CURRENT_COLOR=blue"  > .colors.env
-                echo "TARGET_COLOR=green" >> .colors.env
-            elif [ "${GREEN}" -gt 0 ] && [ "${BLUE}" -eq 0 ]; then
-                echo "CURRENT_COLOR=green" > .colors.env
-                echo "TARGET_COLOR=blue"  >> .colors.env
-            elif [ "${BLUE}" -eq 0 ] && [ "${GREEN}" -eq 0 ]; then
-                echo "CURRENT_COLOR=none" > .colors.env
-                echo "TARGET_COLOR=blue"  >> .colors.env
-            else
-                echo "[detect] both colors running; defaulting CURRENT=blue TARGET=green"
-                echo "CURRENT_COLOR=blue"  > .colors.env
-                echo "TARGET_COLOR=green" >> .colors.env
-            fi
-
-            echo "Written .colors.env:"
-            cat .colors.env
-        '''
-
         script {
-            def fileContent = readFile('.colors.env')
-            echo 'Raw file content: [' + fileContent + ']'
+          def blue = sh(
+            script: 'kubectl get deploy web-app-blue -n prod-app -o jsonpath="{.status.readyReplicas}" 2>/dev/null || echo 0',
+            returnStdout: true
+          ).trim()
 
-            def colors = readProperties file: '.colors.env'
-            echo 'Map contents: ' + colors.toString()
-            echo 'CURRENT_COLOR value: [' + colors['CURRENT_COLOR'] + ']'
-            echo 'TARGET_COLOR value: [' + colors['TARGET_COLOR'] + ']'
+          def green = sh(
+            script: 'kubectl get deploy web-app-green -n prod-app -o jsonpath="{.status.readyReplicas}" 2>/dev/null || echo 0',
+            returnStdout: true
+          ).trim()
 
-            env.CURRENT_COLOR = colors['CURRENT_COLOR']
-            env.TARGET_COLOR  = colors['TARGET_COLOR']
+          blue = blue ? blue : "0"
+          green = green ? green : "0"
 
-            echo 'env.CURRENT_COLOR: [' + env.CURRENT_COLOR + ']'
-            echo 'env.TARGET_COLOR: [' + env.TARGET_COLOR + ']'
+          echo "[detect] ready: blue=${blue}, green=${green}"
+
+          if (blue.toInteger() > 0 && green.toInteger() == 0) {
+            env.CURRENT_COLOR = "blue"
+            env.TARGET_COLOR = "green"
+          }
+          else if (green.toInteger() > 0 && blue.toInteger() == 0) {
+            env.CURRENT_COLOR = "green"
+            env.TARGET_COLOR = "blue"
+          }
+          else if (blue.toInteger() == 0 && green.toInteger() == 0) {
+            env.CURRENT_COLOR = "none"
+            env.TARGET_COLOR = "blue"
+          }
+          else {
+            echo "[detect] both colors running; default CURRENT=blue TARGET=green"
+            env.CURRENT_COLOR = "blue"
+            env.TARGET_COLOR = "green"
+          }
+
+          echo "Active Color : ${env.CURRENT_COLOR}"
+          echo "Target Color : ${env.TARGET_COLOR}"
         }
       }
     }
+    
  
 
     stage('Build & Apply Kustomize Overlay (commit-driven weights)') {
