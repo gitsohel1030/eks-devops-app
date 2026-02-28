@@ -220,34 +220,34 @@ pipeline {
             echo "[detect] ready: blue=${BLUE}, green=${GREEN}"
 
             if [ "${BLUE}" -gt 0 ] && [ "${GREEN}" -eq 0 ]; then
-                CURRENT_COLOR="blue"; TARGET_COLOR="green"
+                echo "CURRENT_COLOR=blue"  > .colors.env
+                echo "TARGET_COLOR=green" >> .colors.env
             elif [ "${GREEN}" -gt 0 ] && [ "${BLUE}" -eq 0 ]; then
-                CURRENT_COLOR="green"; TARGET_COLOR="blue"
+                echo "CURRENT_COLOR=green" > .colors.env
+                echo "TARGET_COLOR=blue"  >> .colors.env
             elif [ "${BLUE}" -eq 0 ] && [ "${GREEN}" -eq 0 ]; then
-                CURRENT_COLOR="none"; TARGET_COLOR="blue"
+                echo "CURRENT_COLOR=none" > .colors.env
+                echo "TARGET_COLOR=blue"  >> .colors.env
             else
                 echo "[detect] both colors running; defaulting CURRENT=blue TARGET=green"
-                CURRENT_COLOR="blue"; TARGET_COLOR="green"
+                echo "CURRENT_COLOR=blue"  > .colors.env
+                echo "TARGET_COLOR=green" >> .colors.env
             fi
 
-            cat > .colors.env << EOF
-            CURRENT_COLOR=${CURRENT_COLOR}
-            TARGET_COLOR=${TARGET_COLOR}
-            EOF
+            echo "Written .colors.env:"
+            cat .colors.env
+        '''
 
-              echo "Written .colors.env:"
-              cat .colors.env
-          '''
-
-          script {
-              def colors = readProperties file: '.colors.env'
-              env.CURRENT_COLOR = colors['CURRENT_COLOR']
-              env.TARGET_COLOR  = colors['TARGET_COLOR']
-              echo 'Active Color : ' + env.CURRENT_COLOR
-              echo 'Target Color : ' + env.TARGET_COLOR
-          }
+        script {
+            def colors = readProperties file: '.colors.env'
+            env.CURRENT_COLOR = colors['CURRENT_COLOR']
+            env.TARGET_COLOR  = colors['TARGET_COLOR']
+            echo 'Active Color : ' + env.CURRENT_COLOR
+            echo 'Target Color : ' + env.TARGET_COLOR
+        }
       }
-    } 
+    }
+  
  
 
     stage('Build & Apply Kustomize Overlay (commit-driven weights)') {
