@@ -340,7 +340,7 @@ pipeline {
     stage('Optional: Scale down OLD color') {
       when { expression { return env.SCALE_DOWN_OLD == 'true' } }
       steps {
-        sh '''#!/usr/bin/env bash -euo pipefail
+        sh '''set -eu pipefail
           if [ "${TARGET_COLOR}" = "green" ]; then
             kubectl scale deployment/${APP_NAME}-blue -n ${K8S_NAMESPACE} --replicas=0 || true
           else
@@ -354,7 +354,7 @@ pipeline {
   post {
     failure {
       echo "Pipeline failed. Printing diagnostics…"
-      sh '''#!/usr/bin/env bash -euo pipefail
+      sh '''set -eu pipefail
 
         echo "----- Deploy diagnostics -----"
 
