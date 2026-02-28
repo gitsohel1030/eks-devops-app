@@ -217,10 +217,10 @@ pipeline {
                     bash -lc '
                       set -eu pipefail
 
-                      BLUE=$(kubectl get deploy ${APP_NAME}-blue  -n ${K8S_NAMESPACE} -o jsonpath="{.status.readyReplicas}" 2>/dev/null || echo 0)
+                      BLUE=$(kubectl get deploy ${APP_NAME}-blue -n ${K8S_NAMESPACE} -o go-template='{{or .status.readyReplicas 0}}' 2>/dev/null || echo 0)
                       BLUE=${BLUE:-0}
 
-                      GREEN=$(kubectl get deploy ${APP_NAME}-green -n ${K8S_NAMESPACE} -o jsonpath="{.status.readyReplicas}" 2>/dev/null || echo 0)
+                      GREEN=$(kubectl get deploy ${APP_NAME}-green -n ${K8S_NAMESPACE} -o go-template='{{or .status.readyReplicas 0}}' 2>/dev/null || echo 0)
                       GREEN=${GREEN:-0}
 
                       if [ "$BLUE" -gt 0 ]; then
@@ -243,7 +243,11 @@ pipeline {
           } else if (active == "green") {
             env.CURRENT_COLOR = "green"
             env.TARGET_COLOR  = "blue"
-          } else {
+          } else if (active == "null") {
+            env.CURRENT_COLOR = "none"
+            env.TARGET_COLOR  = "blue"
+          }
+           else {
             // active == none (first deploy)
             env.CURRENT_COLOR = "none"
             env.TARGET_COLOR  = "blue"
