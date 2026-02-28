@@ -214,13 +214,13 @@ pipeline {
           def active = sh(
             label: 'Detect active color',
             script: '''
-                    bash -lc '
+                    bash -lc "
                       set -eu pipefail
 
-                      BLUE=$(kubectl get deploy ${APP_NAME}-blue -n ${K8S_NAMESPACE} -o go-template="{{or .status.readyReplicas 0}}" 2>/dev/null || echo 0)
+                      BLUE=$(kubectl get deploy ${APP_NAME}-blue -n ${K8S_NAMESPACE} -o go-template='{{or .status.readyReplicas 0}}' 2>/dev/null || echo 0)
                       BLUE=${BLUE:-0}
 
-                      GREEN=$(kubectl get deploy ${APP_NAME}-green -n ${K8S_NAMESPACE} -o go-template="{{or .status.readyReplicas 0}}" 2>/dev/null || echo 0)
+                      GREEN=$(kubectl get deploy ${APP_NAME}-green -n ${K8S_NAMESPACE} -o go-template='{{or .status.readyReplicas 0}}' 2>/dev/null || echo 0)
                       GREEN=${GREEN:-0}
 
                       if [ "$BLUE" -gt 0 ]; then
@@ -231,7 +231,7 @@ pipeline {
                         # first deployment ever → no active color yet
                         echo none
                       fi
-                    '
+                    "
                     ''',
             returnStdout: true
           ).trim()
@@ -243,7 +243,7 @@ pipeline {
           } else if (active == "green") {
             env.CURRENT_COLOR = "green"
             env.TARGET_COLOR  = "blue"
-          } else if (active == "null") {
+          } else if (active == null) {
             env.CURRENT_COLOR = "none"
             env.TARGET_COLOR  = "blue"
           }
