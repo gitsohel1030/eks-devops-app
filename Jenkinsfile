@@ -297,10 +297,8 @@ pipeline {
                 PATCH_FILE="${OUT}/patch-green-image.yaml"
               fi
 
-                # Stamp the image tag placeholder in the selected patch
-                sed -i "s|__IMAGE_TAG__|${IMAGE_TAG}|g" "${OUT}/patch-blue-image.yaml"  || true
-                sed -i "s|__IMAGE_TAG__|${IMAGE_TAG}|g" "${OUT}/patch-green-image.yaml" || true
-
+              # Stamp the image tag placeholder in the selected patch
+              sed -i "s|__IMAGE_TAG__|${IMAGE_TAG}|g" "${PATCH_FILE}" || true
 
               echo "=== Kustomize build (preview) ==="
               kubectl kustomize "${OUT}" | head -n 200 || true

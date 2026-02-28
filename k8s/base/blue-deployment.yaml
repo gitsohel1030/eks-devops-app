@@ -31,7 +31,7 @@ spec:
           emptyDir: {}
         - name: nginx-tmp
           emptyDir: {}
-          
+
       securityContext:
         runAsNonRoot: true        
         runAsUser: 1000
@@ -44,7 +44,7 @@ spec:
 
       containers:
         - name: web-app
-          image: 608827180555.dkr.ecr.ap-south-1.amazonaws.com/web-app
+          image: 608827180555.dkr.ecr.ap-south-1.amazonaws.com/web-app:1839099
           ports:
             - containerPort: 80
 
@@ -77,13 +77,13 @@ spec:
 
           livenessProbe:
             httpGet: 
-              path: /health
+              path: /
               port: 80
             initialDelaySeconds: 15
             periodSeconds: 20
           readinessProbe:
             httpGet:
-              path: /health
+              path: /
               port: 80
             initialDelaySeconds: 5
             periodSeconds: 10
