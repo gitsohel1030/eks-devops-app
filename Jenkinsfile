@@ -208,23 +208,53 @@ pipeline {
     // }
 
 
-    script {
-      def fileContent = readFile('.colors.env')
-      echo 'Raw file content: [' + fileContent + ']'
-      
-      def colors = readProperties file: '.colors.env'
-      echo 'Map contents: ' + colors.toString()
-      echo 'CURRENT_COLOR value: [' + colors['CURRENT_COLOR'] + ']'
-      echo 'TARGET_COLOR value: [' + colors['TARGET_COLOR'] + ']'
-      
-      env.CURRENT_COLOR = colors['CURRENT_COLOR']
-      env.TARGET_COLOR  = colors['TARGET_COLOR']
-      
-      echo 'env.CURRENT_COLOR: [' + env.CURRENT_COLOR + ']'
-      echo 'env.TARGET_COLOR: [' + env.TARGET_COLOR + ']'
+    stage('Determine TARGET color') {
+      steps {
+        sh '''
+            set -eu pipefail
+            BLUE=$(kubectl get deploy web-app-blue  -n prod-app -o jsonpath="{.status.readyReplicas}" 2>/dev/null || echo "0")
+            GREEN=$(kubectl get deploy web-app-green -n prod-app -o jsonpath="{.status.readyReplicas}" 2>/dev/null || echo "0")
+            BLUE=${BLUE:-0}
+            GREEN=${GREEN:-0}
+
+            echo "[detect] ready: blue=${BLUE}, green=${GREEN}"
+
+            if [ "${BLUE}" -gt 0 ] && [ "${GREEN}" -eq 0 ]; then
+                echo "CURRENT_COLOR=blue"  > .colors.env
+                echo "TARGET_COLOR=green" >> .colors.env
+            elif [ "${GREEN}" -gt 0 ] && [ "${BLUE}" -eq 0 ]; then
+                echo "CURRENT_COLOR=green" > .colors.env
+                echo "TARGET_COLOR=blue"  >> .colors.env
+            elif [ "${BLUE}" -eq 0 ] && [ "${GREEN}" -eq 0 ]; then
+                echo "CURRENT_COLOR=none" > .colors.env
+                echo "TARGET_COLOR=blue"  >> .colors.env
+            else
+                echo "[detect] both colors running; defaulting CURRENT=blue TARGET=green"
+                echo "CURRENT_COLOR=blue"  > .colors.env
+                echo "TARGET_COLOR=green" >> .colors.env
+            fi
+
+            echo "Written .colors.env:"
+            cat .colors.env
+        '''
+
+        script {
+            def fileContent = readFile('.colors.env')
+            echo 'Raw file content: [' + fileContent + ']'
+
+            def colors = readProperties file: '.colors.env'
+            echo 'Map contents: ' + colors.toString()
+            echo 'CURRENT_COLOR value: [' + colors['CURRENT_COLOR'] + ']'
+            echo 'TARGET_COLOR value: [' + colors['TARGET_COLOR'] + ']'
+
+            env.CURRENT_COLOR = colors['CURRENT_COLOR']
+            env.TARGET_COLOR  = colors['TARGET_COLOR']
+
+            echo 'env.CURRENT_COLOR: [' + env.CURRENT_COLOR + ']'
+            echo 'env.TARGET_COLOR: [' + env.TARGET_COLOR + ']'
+        }
+      }
     }
- 
-  
  
 
     stage('Build & Apply Kustomize Overlay (commit-driven weights)') {
