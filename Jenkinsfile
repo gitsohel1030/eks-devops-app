@@ -209,48 +209,44 @@ pipeline {
 
 
     stage('Determine TARGET color') {
-        steps {
-            script {
-                def blueReady = sh(
-                    returnStdout: true,
-                    script: "kubectl get deploy ${APP_NAME}-blue -n ${K8S_NAMESPACE} -o jsonpath='{.status.readyReplicas}' 2>/dev/null || true"
-                ).trim()
-    
-                def greenReady = sh(
-                    returnStdout: true,
-                    script: "kubectl get deploy ${APP_NAME}-green -n ${K8S_NAMESPACE} -o jsonpath='{.status.readyReplicas}' 2>/dev/null || true"
-                ).trim()
-    
-                blueReady  = (blueReady  ==~ /^\d+$/) ? blueReady  : "0"
-                greenReady = (greenReady ==~ /^\d+$/) ? greenReady : "0"
-    
-                int blueN  = blueReady.toInteger()
-                int greenN = greenReady.toInteger()
-    
-                echo "[detect] ready: blue=${blueN}, green=${greenN}"
-    
-                // Write to file — this is the source of truth for all downstream stages
-                if (blueN > 0 && greenN == 0) {
-                    writeFile file: '.colors.env', text: "CURRENT_COLOR=blue\nTARGET_COLOR=green\n"
-                } else if (greenN > 0 && blueN == 0) {
-                    writeFile file: '.colors.env', text: "CURRENT_COLOR=green\nTARGET_COLOR=blue\n"
-                } else if (blueN == 0 && greenN == 0) {
-                    writeFile file: '.colors.env', text: "CURRENT_COLOR=none\nTARGET_COLOR=blue\n"
-                } else {
-                    echo "[detect] both colors running; defaulting CURRENT=blue, TARGET=green"
-                    writeFile file: '.colors.env', text: "CURRENT_COLOR=blue\nTARGET_COLOR=green\n"
-                }
-    
-                // Read back immediately to populate env.* from file (indirect assignment — avoids CPS bug)
-                def colors = readProperties file: '.colors.env'
-                env.CURRENT_COLOR = colors['CURRENT_COLOR']
-                env.TARGET_COLOR  = colors['TARGET_COLOR']
-    
-                echo "Active Color : ${env.CURRENT_COLOR}"
-                echo "Target Color : ${env.TARGET_COLOR}"
-            }
-        }
+      steps {
+          sh '''
+              set -eu pipefail
+
+              BLUE=$(kubectl get deploy web-app-blue  -n prod-app -o jsonpath="{.status.readyReplicas}" 2>/dev/null || echo "0")
+              GREEN=$(kubectl get deploy web-app-green -n prod-app -o jsonpath="{.status.readyReplicas}" 2>/dev/null || echo "0")
+
+              BLUE=${BLUE:-0}
+              GREEN=${GREEN:-0}
+
+              echo "[detect] ready: blue=${BLUE}, green=${GREEN}"
+
+              if [ "${BLUE}" -gt 0 ] && [ "${GREEN}" -eq 0 ]; then
+                  CURRENT_COLOR="blue"; TARGET_COLOR="green"
+              elif [ "${GREEN}" -gt 0 ] && [ "${BLUE}" -eq 0 ]; then
+                  CURRENT_COLOR="green"; TARGET_COLOR="blue"
+              elif [ "${BLUE}" -eq 0 ] && [ "${GREEN}" -eq 0 ]; then
+                  CURRENT_COLOR="none"; TARGET_COLOR="blue"
+              else
+                  echo "[detect] both colors running; defaulting CURRENT=blue TARGET=green"
+                  CURRENT_COLOR="blue"; TARGET_COLOR="green"
+              fi
+
+              printf "CURRENT_COLOR=%s\\nTARGET_COLOR=%s\\n" "$CURRENT_COLOR" "$TARGET_COLOR" > .colors.env
+              echo "[detect] Written to .colors.env:"
+              cat .colors.env
+          '''
+          // Load into env.* via readProperties AFTER the sh block writes the file
+          script {
+              def colors = readProperties file: '.colors.env'
+              env.CURRENT_COLOR = colors['CURRENT_COLOR']
+              env.TARGET_COLOR  = colors['TARGET_COLOR']
+              echo "Active Color : ${env.CURRENT_COLOR}"
+              echo "Target Color : ${env.TARGET_COLOR}"
+          }
+      }
     }
+ 
 
     stage('Build & Apply Kustomize Overlay (commit-driven weights)') {
       steps {
