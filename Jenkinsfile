@@ -209,50 +209,63 @@ pipeline {
 
 
     stage('Determine TARGET color') {
-      steps {
-        script {
-          def blueReady = sh(
-            returnStdout: true,
-            script: "kubectl get deploy ${APP_NAME}-blue -n ${K8S_NAMESPACE} -o go-template='{{if .status.readyReplicas}}{{.status.readyReplicas}}{{else}}0{{end}}' 2>/dev/null || echo 0"
-          ).trim()
-
-          def greenReady = sh(
-            returnStdout: true,
-            script: "kubectl get deploy ${APP_NAME}-green -n ${K8S_NAMESPACE} -o go-template='{{if .status.readyReplicas}}{{.status.readyReplicas}}{{else}}0{{end}}' 2>/dev/null || echo 0"
-          ).trim()
-
-          // Normalize (in case Jenkins returns junk)
-          if (!(blueReady  ==~ /^\\d+$/))  blueReady  = "0"
-          if (!(greenReady ==~ /^\\d+$/)) greenReady = "0"
-
-          int blueN  = blueReady.toInteger()
-          int greenN = greenReady.toInteger()
-
-          echo "[detect] ready: blue=${blueN}, green=${greenN}"
-
-          // Decide active/target
-          if (blueN > 0 && greenN == 0) {
-            env.CURRENT_COLOR = "blue"
-            env.TARGET_COLOR  = "green"
-          } else if (greenN > 0 && blueN == 0) {
-            env.CURRENT_COLOR = "green"
-            env.TARGET_COLOR  = "blue"
-          } else if (blueN == 0 && greenN == 0) {
-            // First deploy ever
-            env.CURRENT_COLOR = "none"
-            env.TARGET_COLOR  = "blue"
-          } else {
-            // Both are running (common in blue/green) → pick target deterministically
-            // (deploy to opposite of CURRENT_COLOR; choose CURRENT based on ingress weight ideally)
-            env.CURRENT_COLOR = "blue"
-            env.TARGET_COLOR  = "green"
-            echo "[detect] both colors running; defaulting CURRENT=blue, TARGET=green"
-          }
-
-          echo "Active Color: ${env.CURRENT_COLOR}"
-          echo "Target Color: ${env.TARGET_COLOR}"
+        steps {
+            script {
+                def blueReady = sh(
+                    returnStdout: true,
+                    script: """
+                        kubectl get deploy ${APP_NAME}-blue -n ${K8S_NAMESPACE} \ 
+                        -o jsonpath='{.status.readyReplicas}' 2>/dev/null || true
+                    """.trim()
+                ).trim()
+    
+                def greenReady = sh(
+                    returnStdout: true,
+                    script: """
+                        kubectl get deploy ${APP_NAME}-green -n ${K8S_NAMESPACE} \                         
+                        -o jsonpath='{.status.readyReplicas}' 2>/dev/null || true
+                    """.trim()
+                ).trim()
+    
+                // Normalize empty/non-numeric to 0
+                blueReady  = (blueReady  ==~ /^\d+$/) ? blueReady  : "0"
+                greenReady = (greenReady ==~ /^\d+$/) ? greenReady : "0"
+    
+                int blueN  = blueReady.toInteger()
+                int greenN = greenReady.toInteger()
+    
+                echo "[detect] ready: blue=${blueN}, green=${greenN}"
+    
+                String currentColor
+                String targetColor
+    
+                if (blueN > 0 && greenN == 0) {
+                    currentColor = "blue"
+                    targetColor  = "green"
+                } else if (greenN > 0 && blueN == 0) {
+                    currentColor = "green"
+                    targetColor  = "blue"
+                } else if (blueN == 0 && greenN == 0) {
+                    currentColor = "none"
+                    targetColor  = "blue"
+                } else {
+                    currentColor = "blue"
+                    targetColor  = "green"
+                    echo "[detect] both colors running; defaulting CURRENT=blue, TARGET=green"
+                }
+    
+                // Set env vars
+                env.CURRENT_COLOR = currentColor
+                env.TARGET_COLOR  = targetColor
+    
+                // Also persist to file so the shell stages can source it reliably
+                writeFile file: '.colors.env',
+                          text: "CURRENT_COLOR=${currentColor}\nTARGET_COLOR=${targetColor}\n"
+    
+                echo "Active Color : ${env.CURRENT_COLOR}"
+                echo "Target Color : ${env.TARGET_COLOR}"
+            }
         }
-      }
     }
 
 
