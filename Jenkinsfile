@@ -217,10 +217,10 @@ pipeline {
                     bash -lc '
                       set -eu pipefail
 
-                      BLUE=$(kubectl get deploy ${APP_NAME}-blue -n ${K8S_NAMESPACE} -o go-template='{{or .status.readyReplicas 0}}' 2>/dev/null || echo 0)
+                      BLUE=$(kubectl get deploy ${APP_NAME}-blue -n ${K8S_NAMESPACE} -o go-template="{{or .status.readyReplicas 0}}" 2>/dev/null || echo 0)
                       BLUE=${BLUE:-0}
 
-                      GREEN=$(kubectl get deploy ${APP_NAME}-green -n ${K8S_NAMESPACE} -o go-template='{{or .status.readyReplicas 0}}' 2>/dev/null || echo 0)
+                      GREEN=$(kubectl get deploy ${APP_NAME}-green -n ${K8S_NAMESPACE} -o go-template="{{or .status.readyReplicas 0}}" 2>/dev/null || echo 0)
                       GREEN=${GREEN:-0}
 
                       if [ "$BLUE" -gt 0 ]; then
