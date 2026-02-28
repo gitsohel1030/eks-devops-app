@@ -2,7 +2,6 @@ apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
   name: web-app-ingress
-  namespace: prod-app
   annotations:
     # Weighted forward action: weights provided by CI per step
     alb.ingress.kubernetes.io/actions.forward-blue-green: >-

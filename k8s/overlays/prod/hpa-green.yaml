@@ -2,7 +2,7 @@ apiVersion: autoscaling/v2
 kind: HorizontalPodAutoscaler
 metadata: 
   name: web-app-green-hpa
-  namespace: prod-app
+  # namespace: prod-app
 spec:
   scaleTargetRef:
     apiVersion: apps/v1

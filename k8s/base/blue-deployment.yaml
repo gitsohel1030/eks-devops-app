@@ -2,7 +2,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: web-app-blue
-  namespace: prod-app
+  # namespace: prod-app
 spec:
   replicas: 2
   # strategy: 
