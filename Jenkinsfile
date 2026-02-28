@@ -210,40 +210,44 @@ pipeline {
 
     stage('Determine TARGET color') {
       steps {
-          // STEP 1: Pure shell — detect and write file
-          sh '''
-              set -eu pipefail
-              BLUE=$(kubectl get deploy web-app-blue  -n prod-app -o jsonpath="{.status.readyReplicas}" 2>/dev/null || echo "0")
-              GREEN=$(kubectl get deploy web-app-green -n prod-app -o jsonpath="{.status.readyReplicas}" 2>/dev/null || echo "0")
-              BLUE=${BLUE:-0}
-              GREEN=${GREEN:-0}
-              echo "[detect] ready: blue=${BLUE}, green=${GREEN}"
-              if [ "${BLUE}" -gt 0 ] && [ "${GREEN}" -eq 0 ]; then
-                  CURRENT_COLOR="blue"; TARGET_COLOR="green"
-              elif [ "${GREEN}" -gt 0 ] && [ "${BLUE}" -eq 0 ]; then
-                  CURRENT_COLOR="green"; TARGET_COLOR="blue"
-              elif [ "${BLUE}" -eq 0 ] && [ "${GREEN}" -eq 0 ]; then
-                  CURRENT_COLOR="none"; TARGET_COLOR="blue"
-              else
-                  echo "[detect] both colors running; defaulting CURRENT=blue TARGET=green"
-                  CURRENT_COLOR="blue"; TARGET_COLOR="green"
-              fi
-              printf "CURRENT_COLOR=%s\nTARGET_COLOR=%s\n" "$CURRENT_COLOR" "$TARGET_COLOR" > .colors.env
-              echo "Written .colors.env:"; cat .colors.env
+        sh '''
+            set -eu pipefail
+            BLUE=$(kubectl get deploy web-app-blue  -n prod-app -o jsonpath="{.status.readyReplicas}" 2>/dev/null || echo "0")
+            GREEN=$(kubectl get deploy web-app-green -n prod-app -o jsonpath="{.status.readyReplicas}" 2>/dev/null || echo "0")
+            BLUE=${BLUE:-0}
+            GREEN=${GREEN:-0}
+
+            echo "[detect] ready: blue=${BLUE}, green=${GREEN}"
+
+            if [ "${BLUE}" -gt 0 ] && [ "${GREEN}" -eq 0 ]; then
+                CURRENT_COLOR="blue"; TARGET_COLOR="green"
+            elif [ "${GREEN}" -gt 0 ] && [ "${BLUE}" -eq 0 ]; then
+                CURRENT_COLOR="green"; TARGET_COLOR="blue"
+            elif [ "${BLUE}" -eq 0 ] && [ "${GREEN}" -eq 0 ]; then
+                CURRENT_COLOR="none"; TARGET_COLOR="blue"
+            else
+                echo "[detect] both colors running; defaulting CURRENT=blue TARGET=green"
+                CURRENT_COLOR="blue"; TARGET_COLOR="green"
+            fi
+
+            cat > .colors.env << EOF
+            CURRENT_COLOR=${CURRENT_COLOR}
+            TARGET_COLOR=${TARGET_COLOR}
+            EOF
+
+              echo "Written .colors.env:"
+              cat .colors.env
           '''
-  
-          // STEP 2: Pure Groovy — read file, set env.*
+
           script {
               def colors = readProperties file: '.colors.env'
               env.CURRENT_COLOR = colors['CURRENT_COLOR']
               env.TARGET_COLOR  = colors['TARGET_COLOR']
-              // Use single quotes — these are Groovy string literals, NOT GStrings
               echo 'Active Color : ' + env.CURRENT_COLOR
               echo 'Target Color : ' + env.TARGET_COLOR
           }
       }
-    }
- 
+    } 
  
 
     stage('Build & Apply Kustomize Overlay (commit-driven weights)') {
