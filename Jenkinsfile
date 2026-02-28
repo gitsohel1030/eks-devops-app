@@ -213,36 +213,40 @@ pipeline {
         script {
           def active = sh(
             label: 'Detect active color',
-            returnStdout: true,
-            script: '''
-                bash -lc "
-                  set -Eeuo pipefail
+            sh '''
+                set -eu pipefail
 
-                  BLUE=\\$(kubectl get deploy \${APP_NAME}-blue  -n \${K8S_NAMESPACE} -o go-template='{{or .status.readyReplicas 0}}' 2>/dev/null || echo 0)
-                  GREEN=\$(kubectl get deploy \${APP_NAME}-green -n \${K8S_NAMESPACE} -o go-template='{{or .status.readyReplicas 0}}' 2>/dev/null || echo 0)
+                BLUE=\$(kubectl get deploy \${APP_NAME}-blue -n \${K8S_NAMESPACE} -o go-template="{{or .status.readyReplicas 0}}" 2>/dev/null || echo 0)
+                BLUE=\\${BLUE:-0}
 
-                  # Debug to stderr (won't pollute stdout capture)
-                  echo \\"[detect] BLUE=\$BLUE GREEN=\$GREEN\\" 1>&2
+                GREEN=\$(kubectl get deploy \${APP_NAME}-green -n \${K8S_NAMESPACE} -o go-template="{{or .status.readyReplicas 0}}" 2>/dev/null || echo 0)
+                GREEN=\${GREEN:-0}
 
-                  if [ \\"\$BLUE\\" -gt 0 ]; then
-                    echo blue
-                  elif [ \\"\$GREEN\\" -gt 0 ]; then
-                    echo green
-                  else
-                    echo none
-                  fi
-                "
-                '''
+                if [ "\$BLUE" -gt 0 ]; then
+                  echo blue
+                elif [ "\$GREEN" -gt 0 ]; then
+                  echo green
+                else
+                  # first deployment ever → no active color yet
+                  echo none
+                fi              
+              ''',
+            returnStdout: true
           ).trim()
 
+          // Always set both env vars
           if (active == "blue") {
             env.CURRENT_COLOR = "blue"
             env.TARGET_COLOR  = "green"
           } else if (active == "green") {
             env.CURRENT_COLOR = "green"
             env.TARGET_COLOR  = "blue"
-          } else {
-            // 'none' or unexpected → default first deploy to blue
+          } else if (active == null) {
+            env.CURRENT_COLOR = "none"
+            env.TARGET_COLOR  = "blue"
+          }
+           else {
+            // active == none (first deploy)
             env.CURRENT_COLOR = "none"
             env.TARGET_COLOR  = "blue"
           }
