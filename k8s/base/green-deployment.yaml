@@ -20,17 +20,29 @@ spec:
         app: web-app
         version: green
     spec:
-      terminationGracePeriodSeconds: 30
-
       securityContext:
         runAsNonRoot: true
-        allowPrivilegeEscalation: false
-        readOnlyRootFilesystem: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 2000
+        seccompProfile:
+          type: RuntimeDefault
+
+      terminationGracePeriodSeconds: 30
+
       containers:
         - name: web-app
           image: 608827180555.dkr.ecr.ap-south-1.amazonaws.com/web-app
           ports:
             - containerPort: 80
+
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+            runAsNonRoot: true
+
           resources:
             requests:
               cpu: "200m"

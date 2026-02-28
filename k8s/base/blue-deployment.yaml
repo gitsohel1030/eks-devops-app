@@ -2,7 +2,11 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: web-app-blue
-  # namespace: prod-app
+  # namespace: prod-app  
+  labels:
+    app: web-app
+    version: blue
+
 spec:
   replicas: 2
   # strategy: 
@@ -20,17 +24,29 @@ spec:
         app: web-app
         version: blue
     spec:
+      securityContext:
+        runAsNonRoot: true        
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 2000
+        seccompProfile:
+          type: RuntimeDefault
+
       terminationGracePeriodSeconds: 30
 
-      securityContext:
-        runAsNonRoot: true
-        allowPrivilegeEscalation: false
-        readOnlyRootFilesystem: true
       containers:
         - name: web-app
           image: 608827180555.dkr.ecr.ap-south-1.amazonaws.com/web-app
           ports:
             - containerPort: 80
+          
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+            runAsNonRoot: true
+
           resources:
             requests:
               cpu: "200m"
