@@ -213,19 +213,14 @@ pipeline {
             script {
                 def blueReady = sh(
                     returnStdout: true,
-                    script: """
-                        kubectl get deploy ${APP_NAME}-blue -n ${K8S_NAMESPACE} -o jsonpath='{.status.readyReplicas}' 2>/dev/null || true
-                    """.trim()
+                    script: "kubectl get deploy ${APP_NAME}-blue -n ${K8S_NAMESPACE} -o jsonpath='{.status.readyReplicas}' 2>/dev/null || true"
                 ).trim()
     
                 def greenReady = sh(
                     returnStdout: true,
-                    script: """
-                        kubectl get deploy ${APP_NAME}-green -n ${K8S_NAMESPACE} -o jsonpath='{.status.readyReplicas}' 2>/dev/null || true
-                    """.trim()
+                    script: "kubectl get deploy ${APP_NAME}-green -n ${K8S_NAMESPACE} -o jsonpath='{.status.readyReplicas}' 2>/dev/null || true"
                 ).trim()
     
-                // Normalize empty/non-numeric to 0
                 blueReady  = (blueReady  ==~ /^\d+$/) ? blueReady  : "0"
                 greenReady = (greenReady ==~ /^\d+$/) ? greenReady : "0"
     
@@ -234,37 +229,32 @@ pipeline {
     
                 echo "[detect] ready: blue=${blueN}, green=${greenN}"
     
-                String currentColor
-                String targetColor
-    
+                // Assign env.* DIRECTLY inside each branch — avoids CPS scoping bug
                 if (blueN > 0 && greenN == 0) {
-                    currentColor = "blue"
-                    targetColor  = "green"
+                    env.CURRENT_COLOR = "blue"
+                    env.TARGET_COLOR  = "green"
                 } else if (greenN > 0 && blueN == 0) {
-                    currentColor = "green"
-                    targetColor  = "blue"
+                    env.CURRENT_COLOR = "green"
+                    env.TARGET_COLOR  = "blue"
                 } else if (blueN == 0 && greenN == 0) {
-                    currentColor = "none"
-                    targetColor  = "blue"
+                    env.CURRENT_COLOR = "none"
+                    env.TARGET_COLOR  = "blue"
                 } else {
-                    currentColor = "blue"
-                    targetColor  = "green"
+                    env.CURRENT_COLOR = "blue"
+                    env.TARGET_COLOR  = "green"
                     echo "[detect] both colors running; defaulting CURRENT=blue, TARGET=green"
                 }
     
-                // Set env vars
-                env.CURRENT_COLOR = currentColor
-                env.TARGET_COLOR  = targetColor
-    
-                // Also persist to file so the shell stages can source it reliably
+                // Persist to file for shell stages
                 writeFile file: '.colors.env',
-                          text: "CURRENT_COLOR=${currentColor}\nTARGET_COLOR=${targetColor}\n"
+                          text: "CURRENT_COLOR=${env.CURRENT_COLOR}\nTARGET_COLOR=${env.TARGET_COLOR}\n"
     
                 echo "Active Color : ${env.CURRENT_COLOR}"
                 echo "Target Color : ${env.TARGET_COLOR}"
             }
         }
     }
+ 
 
 
     stage('Build & Apply Kustomize Overlay (commit-driven weights)') {
