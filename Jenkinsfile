@@ -215,20 +215,20 @@ pipeline {
                     returnStdout: true,
                     script: "kubectl get deploy ${APP_NAME}-blue -n ${K8S_NAMESPACE} -o jsonpath='{.status.readyReplicas}' 2>/dev/null || true"
                 ).trim()
-    ⁠
+    
                 def greenReady = sh(
                     returnStdout: true,
                     script: "kubectl get deploy ${APP_NAME}-green -n ${K8S_NAMESPACE} -o jsonpath='{.status.readyReplicas}' 2>/dev/null || true"
                 ).trim()
-    ⁠
+    
                 blueReady  = (blueReady  ==~ /^\d+$/) ? blueReady  : "0"
                 greenReady = (greenReady ==~ /^\d+$/) ? greenReady : "0"
-    ⁠
+    
                 int blueN  = blueReady.toInteger()
                 int greenN = greenReady.toInteger()
-    ⁠
+    
                 echo "[detect] ready: blue=${blueN}, green=${greenN}"
-    ⁠
+    
                 // Write to file — this is the source of truth for all downstream stages
                 if (blueN > 0 && greenN == 0) {
                     writeFile file: '.colors.env', text: "CURRENT_COLOR=blue\nTARGET_COLOR=green\n"
@@ -240,12 +240,12 @@ pipeline {
                     echo "[detect] both colors running; defaulting CURRENT=blue, TARGET=green"
                     writeFile file: '.colors.env', text: "CURRENT_COLOR=blue\nTARGET_COLOR=green\n"
                 }
-    ⁠
+    
                 // Read back immediately to populate env.* from file (indirect assignment — avoids CPS bug)
                 def colors = readProperties file: '.colors.env'
                 env.CURRENT_COLOR = colors['CURRENT_COLOR']
                 env.TARGET_COLOR  = colors['TARGET_COLOR']
-    ⁠
+    
                 echo "Active Color : ${env.CURRENT_COLOR}"
                 echo "Target Color : ${env.TARGET_COLOR}"
             }
