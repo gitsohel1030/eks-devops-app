@@ -19,9 +19,8 @@ spec:
       labels:
         app: web-app
         version: green
-    spec:      
-      spec:
-        terminationGracePeriodSeconds: 30
+    spec:
+      terminationGracePeriodSeconds: 30
 
       securityContext:
         runAsNonRoot: true
