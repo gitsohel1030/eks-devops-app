@@ -231,7 +231,7 @@ pipeline {
               printf "CURRENT_COLOR=%s\nTARGET_COLOR=%s\n" "$CURRENT_COLOR" "$TARGET_COLOR" > .colors.env
               echo "Written .colors.env:"; cat .colors.env
           '''
-  ⁠
+  
           // STEP 2: Pure Groovy — read file, set env.*
           script {
               def colors = readProperties file: '.colors.env'
