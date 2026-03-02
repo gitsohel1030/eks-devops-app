@@ -13,4 +13,4 @@ resources:
 #   - pairs:
 #       app.kubernetes.io/name: web-name
 #   - pairs:
-#       app.kubernetes.io/part-of: web-app
+#       app.kubernetes.io/part-of: web-app  
