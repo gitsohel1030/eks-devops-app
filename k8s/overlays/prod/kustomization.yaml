@@ -11,6 +11,7 @@ resources:
   - hpa-green.yaml
   - pdb-blue.yaml
   - pdb-green.yaml
+  - release.yaml
 
 
 labels:
