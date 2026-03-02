@@ -221,85 +221,77 @@ pipeline {
           echo "Target Color: ${env.TARGET_COLOR}"
         }
       }
-    }
- 
-    
+    }   
  
 
     stage('Build & Apply Kustomize Overlay') {
       steps {
-        sh label: 'Build and Apply Kustomize', script: '''
-            bash -c '
-              
-              export TARGET_COLOR="\${TARGET_COLOR}"
-              export CURRENT_COLOR="\${CURRENT_COLOR}"
-              export IMAGE_TAG="\${IMAGE_TAG}"
+        script {
 
-              echo "DEBUG: TARGET_COLOR=\$TARGET_COLOR"
-              echo "DEBUG: CURRENT_COLOR=\$CURRENT_COLOR"
-              echo "DEBUG: IMAGE_TAG=\$IMAGE_TAG"
+          echo "Using CURRENT_COLOR=${env.CURRENT_COLOR}"
+          echo "Using TARGET_COLOR=${env.TARGET_COLOR}"
+          echo "Using IMAGE_TAG=${env.IMAGE_TAG}"
 
-              set -eu -o pipefail
+          def OUT = "k8s/.out/prod"
 
-              OUT="k8s/.out/prod"
-              rm -rf "${OUT}"
-              mkdir -p "${OUT}"
+          // --- 1. Clean output dir ---
+          sh "rm -rf ${OUT}"
+          sh "mkdir -p ${OUT}"
 
-              # Copy overlay to a working dir we can mutate
-              cp -R k8s/overlays/prod/* "${OUT}/"
+          // --- 2. Copy overlay ---
+          sh "cp -R k8s/overlays/prod/* ${OUT}/"
 
-              # Optional: if you persist colors in a file, load them
-              if [[ -f .colors.env ]]; then
-                set -a
-                # shellcheck disable=SC1091
-                source ./.colors.env
-                set +a
-              fi
+          // --- 3. Choose correct image patch ---
+          def patchFile = "${OUT}/patch-blue-image.yaml"
 
-              # Fallback: compute TARGET_COLOR if still missing (first run / env loss)
-              if [[ -z "${TARGET_COLOR:-}" ]]; then
-                BLUE=$(kubectl get deploy "${APP_NAME}-blue"  -n "${K8S_NAMESPACE}" -o jsonpath="{.status.readyReplicas}" 2>/dev/null || echo 0);  BLUE=${BLUE:-0}
-                GREEN=$(kubectl get deploy "${APP_NAME}-green" -n "${K8S_NAMESPACE}" -o jsonpath="{.status.readyReplicas}" 2>/dev/null || echo 0); GREEN=${GREEN:-0}
-                if [[ "$BLUE" -gt 0 ]]; then
-                  CURRENT_COLOR="blue"; TARGET_COLOR="green"
-                elif [[ "$GREEN" -gt 0 ]]; then
-                  CURRENT_COLOR="green"; TARGET_COLOR="blue"
-                else
-                  CURRENT_COLOR="none"; TARGET_COLOR="blue"
-                fi
-                printf "CURRENT_COLOR=%s\nTARGET_COLOR=%s\n" "$CURRENT_COLOR" "$TARGET_COLOR" > .colors.env
-              fi
+          if (env.TARGET_COLOR == "green") {
+            sh """
+              sed -i 's|patch-blue-image.yaml|patch-green-image.yaml|' ${OUT}/kustomization.yaml
+            """
+            patchFile = "${OUT}/patch-green-image.yaml"
+          }
 
-              # Choose correct patch by TARGET_COLOR
-              PATCH_FILE="${OUT}/patch-blue-image.yaml"
-              if [[ "${TARGET_COLOR:-}" == "green" ]]; then
-                sed -i "s|patch-blue-image.yaml|patch-green-image.yaml|" "${OUT}/kustomization.yaml"
-                PATCH_FILE="${OUT}/patch-green-image.yaml"
-              fi
+          echo "Patch selected: ${patchFile}"
 
-              # Stamp the image tag placeholder in the selected patch
-              sed -i "s|__IMAGE_TAG__|${IMAGE_TAG}|g" "${PATCH_FILE}" || true
+          // --- 4. Stamp the image tag ---
+          sh """
+            sed -i 's|__IMAGE_TAG__|${env.IMAGE_TAG}|' ${patchFile}
+          """
 
-              echo "=== Kustomize build (preview) ==="
-              kubectl kustomize "${OUT}" | head -n 200 || true
+          // --- 5. Preview ---
+          // echo "=== Kustomize Build Preview ==="
+          // sh "kubectl kustomize ${OUT} | head -n 200"
 
-              echo "=== Diff against cluster (informational) ==="
-              kubectl diff -k "${OUT}" || true
+          // --- 6. Diff vs cluster ---
+          // echo "=== Diff ==="
+          // sh "kubectl diff -k ${OUT} || true"
 
-              echo "=== Apply overlay ==="
-              kubectl apply -k "${OUT}"
+          // --- 7. Apply ---
+          echo "=== Applying overlay ==="
+          sh "kubectl apply -k ${OUT}"
 
-              echo "=== Wait for TARGET rollout ==="
-              kubectl rollout status "deploy/${APP_NAME}-${TARGET_COLOR}" -n "${K8S_NAMESPACE}" --timeout=2m
+          // --- 8. Wait for rollout ---
+          def deployName = "${env.APP_NAME}-${env.TARGET_COLOR}"
+          echo "=== Waiting for rollout: ${deployName} ==="
 
-              # Optional: mark change cause on the deployment
-              kubectl annotate "deploy/${APP_NAME}-${TARGET_COLOR}" \
-                -n "${K8S_NAMESPACE}" kubernetes.io/change-cause="Deploy ${IMAGE_TAG} to ${TARGET_COLOR}" --overwrite || true
+          sh """
+            kubectl rollout status deploy/${deployName} -n ${env.K8S_NAMESPACE} --timeout=3m
+          """
 
-              echo "=== Pods (post-deploy) ==="
-              kubectl get pods -n "${K8S_NAMESPACE}" -l app="${APP_NAME}" -o wide
-            '
-            '''
+          // --- 9. Annotate ---
+          sh """
+            kubectl annotate deploy/${deployName} \
+              -n ${env.K8S_NAMESPACE} \
+              kubernetes.io/change-cause="Deploy ${env.IMAGE_TAG} to ${env.TARGET_COLOR}" \
+              --overwrite || true
+          """
+
+          // --- 10. Pods output ---
+          echo "=== Pods After Deploy ==="
+          sh """
+            kubectl get pods -n ${env.K8S_NAMESPACE} -l app=${env.APP_NAME} -o wide
+          """
+        }
       }
     }
 
