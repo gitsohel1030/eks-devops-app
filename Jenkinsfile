@@ -230,7 +230,7 @@ pipeline {
       steps {
         sh label: 'Build and Apply Kustomize', script: '''
             bash -lc '
-              set -eu pipefail
+              set -eu -o pipefail
 
               OUT="k8s/.out/prod"
               rm -rf "${OUT}"
