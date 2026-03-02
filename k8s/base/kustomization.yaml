@@ -9,8 +9,8 @@ resources:
   - ingress.yaml
 
 # cluster wide labels
-labels:     
-  - pairs:
-      app.kubernetes.io/name: web-name
-  - pairs:
-      app.kubernetes.io/part-of: web-app
+# labels:     
+#   - pairs:
+#       app.kubernetes.io/name: web-name
+#   - pairs:
+#       app.kubernetes.io/part-of: web-app
