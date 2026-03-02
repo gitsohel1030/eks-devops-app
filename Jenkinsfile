@@ -17,9 +17,6 @@ pipeline {
     APP_NAME        = "web-app"          // base name for deployments
     SERVICE_NAME    = "web-svc"        // the stable Service the ALB/Ingress points to
 
-    // CURRENT_COLOR   = ""
-    // TARGET_COLOR    = ""
-
     SCALE_DOWN_OLD  = "true"           // set to "false" to keep old color running for quick rollback
 
   }
@@ -207,27 +204,11 @@ pipeline {
     //   }
     // }
 
-    stage('Debug: release.yaml') {
-      steps {
-        sh '''
-          set -eu
-          echo "PWD=$(pwd)"
-          ls -la k8s/overlays/prod
-          echo "---- release.yaml (show hidden chars) ----"
-          cat -A k8s/overlays/prod/release.yaml || true
-        '''
-      }
-    }
-
-
-
-    stage('Determine TARGET color (shell-safe)') {
+    stage('Determine TARGET color (Git-controlled)') {
       steps {
         script {
-          def active = sh(
-            script: "grep activeColor k8s/overlays/prod/release.yaml | awk '{print \$2}'",
-            returnStdout: true
-          ).trim()
+          def release = readYaml file: 'k8s/overlays/prod/release.yaml'
+          def active = release.activeColor
     
           if (!active) {
             error "activeColor not found in release.yaml"
