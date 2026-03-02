@@ -28,4 +28,4 @@ patches:
       kind: Ingress
       name: web-app-ingress
       namespace: prod-app
-    path: traffic-patch.yaml
+    path: traffic/traffic-blue-100.yaml

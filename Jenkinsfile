@@ -228,72 +228,107 @@ pipeline {
       steps {
         script {
 
-          echo "Using CURRENT_COLOR=${env.CURRENT_COLOR}"
-          echo "Using TARGET_COLOR=${env.TARGET_COLOR}"
-          echo "Using IMAGE_TAG=${env.IMAGE_TAG}"
+          echo "CURRENT_COLOR  = ${env.CURRENT_COLOR}"
+          echo "TARGET_COLOR   = ${env.TARGET_COLOR}"
+          echo "IMAGE_TAG      = ${env.IMAGE_TAG}"
 
           def OUT = "k8s/.out/prod"
 
-          // --- 1. Clean output dir ---
+          // 1. Prepare build directory
           sh "rm -rf ${OUT}"
           sh "mkdir -p ${OUT}"
 
-          // --- 2. Copy overlay ---
+          // 2. Copy overlay
           sh "cp -R k8s/overlays/prod/* ${OUT}/"
 
-          // --- 3. Choose correct image patch ---
-          def patchFile = "${OUT}/patch-blue-image.yaml"
+          // ------------------------------------------------------------
+          // 3. SELECT IMAGE PATCH BASED ON TARGET COLOR
+          // ------------------------------------------------------------
 
-          if (env.TARGET_COLOR == "green") {
-            sh """
-              sed -i 's|patch-blue-image.yaml|patch-green-image.yaml|' ${OUT}/kustomization.yaml
-            """
-            patchFile = "${OUT}/patch-green-image.yaml"
-          }
+          def imagePatch = (env.TARGET_COLOR == "green")
+              ? "patch-green-image.yaml"
+              : "patch-blue-image.yaml"
 
-          echo "Patch selected: ${patchFile}"
+          echo "Using Image Patch: ${imagePatch}"
 
-          // --- 4. Stamp the image tag ---
+          // Swap correct image patch in kustomization.yaml
           sh """
-            sed -i 's|__IMAGE_TAG__|${env.IMAGE_TAG}|' ${patchFile}
+            sed -i 's|patch-blue-image.yaml|${imagePatch}|' ${OUT}/kustomization.yaml
+            sed -i 's|patch-green-image.yaml|${imagePatch}|' ${OUT}/kustomization.yaml
           """
 
-          // --- 5. Preview ---
-          // echo "=== Kustomize Build Preview ==="
+          // Stamp image tag into selected patch file
+          sh """
+            sed -i 's|__IMAGE_TAG__|${env.IMAGE_TAG}|' ${OUT}/${imagePatch}
+          """
+
+          // ------------------------------------------------------------
+          // 4. SELECT TRAFFIC PATCH BASED ON TARGET COLOR
+          // ------------------------------------------------------------
+
+          def trafficPatch = (env.TARGET_COLOR == "green")
+              ? "traffic/traffic-green-100.yaml"
+              : "traffic/traffic-blue-100.yaml"
+
+          echo "Using Traffic Patch: ${trafficPatch}"
+
+          // Replace current traffic patch in kustomization.yaml
+          sh """
+            sed -i 's|traffic/traffic-blue-100.yaml|${trafficPatch}|' ${OUT}/kustomization.yaml
+            sed -i 's|traffic/traffic-green-100.yaml|${trafficPatch}|' ${OUT}/kustomization.yaml
+          """
+
+          // ------------------------------------------------------------
+          // 5. PREVIEW
+          // ------------------------------------------------------------
+
+          // echo "=== KUSTOMIZE PREVIEW ==="
           // sh "kubectl kustomize ${OUT} | head -n 200"
 
-          // --- 6. Diff vs cluster ---
-          // echo "=== Diff ==="
+          // echo "=== DIFF VS CLUSTER ==="
           // sh "kubectl diff -k ${OUT} || true"
 
-          // --- 7. Apply ---
-          echo "=== Applying overlay ==="
+          // ------------------------------------------------------------
+          // 6. APPLY
+          // ------------------------------------------------------------
+          echo "=== APPLYING OVERLAY ==="
           sh "kubectl apply -k ${OUT}"
 
-          // --- 8. Wait for rollout ---
+          // ------------------------------------------------------------
+          // 7. WAIT FOR ROLLOUT
+          // ------------------------------------------------------------
+
           def deployName = "${env.APP_NAME}-${env.TARGET_COLOR}"
-          echo "=== Waiting for rollout: ${deployName} ==="
+
+          echo "Waiting for rollout of Deployment: ${deployName}"
 
           sh """
-            kubectl rollout status deploy/${deployName} -n ${env.K8S_NAMESPACE} --timeout=3m
+            kubectl rollout status deploy/${deployName} \
+            -n ${env.K8S_NAMESPACE} --timeout=4m
           """
 
-          // --- 9. Annotate ---
+          // ------------------------------------------------------------
+          // 8. Change Cause Annotation
+          // ------------------------------------------------------------
+
           sh """
             kubectl annotate deploy/${deployName} \
-              -n ${env.K8S_NAMESPACE} \
-              kubernetes.io/change-cause="Deploy ${env.IMAGE_TAG} to ${env.TARGET_COLOR}" \
-              --overwrite || true
+            -n ${env.K8S_NAMESPACE} \
+            kubernetes.io/change-cause="Deploy ${env.IMAGE_TAG} to ${env.TARGET_COLOR}" \
+            --overwrite || true
           """
 
-          // --- 10. Pods output ---
-          echo "=== Pods After Deploy ==="
-          sh """
-            kubectl get pods -n ${env.K8S_NAMESPACE} -l app=${env.APP_NAME} -o wide
-          """
+          // ------------------------------------------------------------
+          // 9. Post Deploy Pods
+          // ------------------------------------------------------------
+
+          echo "=== PODS AFTER DEPLOY ==="
+          sh "kubectl get pods -n ${env.K8S_NAMESPACE} -l app=${env.APP_NAME} -o wide"
+
         }
       }
     }
+
 
     stage('Show Traffic Weights (from Git overlay)') {
       steps {
