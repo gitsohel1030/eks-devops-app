@@ -17,8 +17,8 @@ pipeline {
     APP_NAME        = "web-app"          // base name for deployments
     SERVICE_NAME    = "web-svc"        // the stable Service the ALB/Ingress points to
 
-    CURRENT_COLOR   = ""
-    TARGET_COLOR    = ""
+    // CURRENT_COLOR   = ""
+    // TARGET_COLOR    = ""
 
     SCALE_DOWN_OLD  = "true"           // set to "false" to keep old color running for quick rollback
 
