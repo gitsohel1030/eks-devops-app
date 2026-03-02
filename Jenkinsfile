@@ -101,9 +101,9 @@ pipeline {
     //   steps { sh 'docker push ${ECR_REPO}:${IMAGE_TAG}' }
     // }
 
-    stage('Configure Kubectl') {
-      steps { sh 'aws eks update-kubeconfig --region ${AWS_REGION} --name ${CLUSTER_NAME}' }
-    }
+    // stage('Configure Kubectl') {
+    //   steps { sh 'aws eks update-kubeconfig --region ${AWS_REGION} --name ${CLUSTER_NAME}' }
+    // }
 
     // DEPRECATED
       // stage('Check if Deploy Needed') {
@@ -221,122 +221,122 @@ pipeline {
 
 
 
-  //   stage('Determine TARGET Color') {
-  //     steps {
-  //       script {
-  //         def release  = readYaml file: "k8s/overlays/prod/release.yaml"
-  //         def active = release.activeColor
+    stage('Determine TARGET Color') {
+      steps {
+        script {
+          def release  = readYaml file: "k8s/overlays/prod/release.yaml"
+          def active = release.activeColor
 
-  //         if (!active) {
-  //           error "activeColor not found in the release.yaml"
-  //         }
+          if (!active) {
+            error "activeColor not found in the release.yaml"
+          }
 
-  //         env.CURRENT_COLOR = active
-  //         env.TARGET_COLOR = (active == "blue") ? "green" : "blue"
+          env.CURRENT_COLOR = active
+          env.TARGET_COLOR = (active == "blue") ? "green" : "blue"
 
-  //         echo "Active Color: ${env.CURRENT_COLOR}"
-  //         echo "Target Color: ${env.TARGET_COLOR}"
-  //       }
-  //     }
-  //   }
+          echo "Active Color: ${env.CURRENT_COLOR}"
+          echo "Target Color: ${env.TARGET_COLOR}"
+        }
+      }
+    }
     
  
 
-  //   stage('Build & Apply Kustomize Overlay (commit-driven weights)') {
-  //     steps {
-  //       sh label: 'Build and Apply Kustomize', script: '''
-  //           bash -lc '
-  //             set -eu pipefail
+    // stage('Build & Apply Kustomize Overlay (commit-driven weights)') {
+    //   steps {
+    //     sh label: 'Build and Apply Kustomize', script: '''
+    //         bash -lc '
+    //           set -eu pipefail
 
-  //             OUT="k8s/.out/prod"
-  //             rm -rf "${OUT}"
-  //             mkdir -p "${OUT}"
+    //           OUT="k8s/.out/prod"
+    //           rm -rf "${OUT}"
+    //           mkdir -p "${OUT}"
 
-  //             # Copy overlay to a working dir we can mutate
-  //             cp -R k8s/overlays/prod/* "${OUT}/"
+    //           # Copy overlay to a working dir we can mutate
+    //           cp -R k8s/overlays/prod/* "${OUT}/"
 
-  //             # Optional: if you persist colors in a file, load them
-  //             if [[ -f .colors.env ]]; then
-  //               set -a
-  //               # shellcheck disable=SC1091
-  //               source ./.colors.env
-  //               set +a
-  //             fi
+    //           # Optional: if you persist colors in a file, load them
+    //           if [[ -f .colors.env ]]; then
+    //             set -a
+    //             # shellcheck disable=SC1091
+    //             source ./.colors.env
+    //             set +a
+    //           fi
 
-  //             # Fallback: compute TARGET_COLOR if still missing (first run / env loss)
-  //             if [[ -z "${TARGET_COLOR:-}" ]]; then
-  //               BLUE=$(kubectl get deploy "${APP_NAME}-blue"  -n "${K8S_NAMESPACE}" -o jsonpath="{.status.readyReplicas}" 2>/dev/null || echo 0);  BLUE=${BLUE:-0}
-  //               GREEN=$(kubectl get deploy "${APP_NAME}-green" -n "${K8S_NAMESPACE}" -o jsonpath="{.status.readyReplicas}" 2>/dev/null || echo 0); GREEN=${GREEN:-0}
-  //               if [[ "$BLUE" -gt 0 ]]; then
-  //                 CURRENT_COLOR="blue"; TARGET_COLOR="green"
-  //               elif [[ "$GREEN" -gt 0 ]]; then
-  //                 CURRENT_COLOR="green"; TARGET_COLOR="blue"
-  //               else
-  //                 CURRENT_COLOR="none"; TARGET_COLOR="blue"
-  //               fi
-  //               printf "CURRENT_COLOR=%s\nTARGET_COLOR=%s\n" "$CURRENT_COLOR" "$TARGET_COLOR" > .colors.env
-  //             fi
+    //           # Fallback: compute TARGET_COLOR if still missing (first run / env loss)
+    //           if [[ -z "${TARGET_COLOR:-}" ]]; then
+    //             BLUE=$(kubectl get deploy "${APP_NAME}-blue"  -n "${K8S_NAMESPACE}" -o jsonpath="{.status.readyReplicas}" 2>/dev/null || echo 0);  BLUE=${BLUE:-0}
+    //             GREEN=$(kubectl get deploy "${APP_NAME}-green" -n "${K8S_NAMESPACE}" -o jsonpath="{.status.readyReplicas}" 2>/dev/null || echo 0); GREEN=${GREEN:-0}
+    //             if [[ "$BLUE" -gt 0 ]]; then
+    //               CURRENT_COLOR="blue"; TARGET_COLOR="green"
+    //             elif [[ "$GREEN" -gt 0 ]]; then
+    //               CURRENT_COLOR="green"; TARGET_COLOR="blue"
+    //             else
+    //               CURRENT_COLOR="none"; TARGET_COLOR="blue"
+    //             fi
+    //             printf "CURRENT_COLOR=%s\nTARGET_COLOR=%s\n" "$CURRENT_COLOR" "$TARGET_COLOR" > .colors.env
+    //           fi
 
-  //             # Choose correct patch by TARGET_COLOR
-  //             PATCH_FILE="${OUT}/patch-blue-image.yaml"
-  //             if [[ "${TARGET_COLOR:-}" == "green" ]]; then
-  //               sed -i "s|patch-blue-image.yaml|patch-green-image.yaml|" "${OUT}/kustomization.yaml"
-  //               PATCH_FILE="${OUT}/patch-green-image.yaml"
-  //             fi
+    //           # Choose correct patch by TARGET_COLOR
+    //           PATCH_FILE="${OUT}/patch-blue-image.yaml"
+    //           if [[ "${TARGET_COLOR:-}" == "green" ]]; then
+    //             sed -i "s|patch-blue-image.yaml|patch-green-image.yaml|" "${OUT}/kustomization.yaml"
+    //             PATCH_FILE="${OUT}/patch-green-image.yaml"
+    //           fi
 
-  //             # Stamp the image tag placeholder in the selected patch
-  //             sed -i "s|__IMAGE_TAG__|${IMAGE_TAG}|g" "${PATCH_FILE}" || true
+    //           # Stamp the image tag placeholder in the selected patch
+    //           sed -i "s|__IMAGE_TAG__|${IMAGE_TAG}|g" "${PATCH_FILE}" || true
 
-  //             echo "=== Kustomize build (preview) ==="
-  //             kubectl kustomize "${OUT}" | head -n 200 || true
+    //           echo "=== Kustomize build (preview) ==="
+    //           kubectl kustomize "${OUT}" | head -n 200 || true
 
-  //             echo "=== Diff against cluster (informational) ==="
-  //             kubectl diff -k "${OUT}" || true
+    //           echo "=== Diff against cluster (informational) ==="
+    //           kubectl diff -k "${OUT}" || true
 
-  //             echo "=== Apply overlay ==="
-  //             kubectl apply -k "${OUT}"
+    //           echo "=== Apply overlay ==="
+    //           kubectl apply -k "${OUT}"
 
-  //             echo "=== Wait for TARGET rollout ==="
-  //             kubectl rollout status "deploy/${APP_NAME}-${TARGET_COLOR}" -n "${K8S_NAMESPACE}" --timeout=2m
+    //           echo "=== Wait for TARGET rollout ==="
+    //           kubectl rollout status "deploy/${APP_NAME}-${TARGET_COLOR}" -n "${K8S_NAMESPACE}" --timeout=2m
 
-  //             # Optional: mark change cause on the deployment
-  //             kubectl annotate "deploy/${APP_NAME}-${TARGET_COLOR}" \
-  //               -n "${K8S_NAMESPACE}" kubernetes.io/change-cause="Deploy ${IMAGE_TAG} to ${TARGET_COLOR}" --overwrite || true
+    //           # Optional: mark change cause on the deployment
+    //           kubectl annotate "deploy/${APP_NAME}-${TARGET_COLOR}" \
+    //             -n "${K8S_NAMESPACE}" kubernetes.io/change-cause="Deploy ${IMAGE_TAG} to ${TARGET_COLOR}" --overwrite || true
 
-  //             echo "=== Pods (post-deploy) ==="
-  //             kubectl get pods -n "${K8S_NAMESPACE}" -l app="${APP_NAME}" -o wide
-  //           '
-  //           '''
-  //     }
-  //   }
+    //           echo "=== Pods (post-deploy) ==="
+    //           kubectl get pods -n "${K8S_NAMESPACE}" -l app="${APP_NAME}" -o wide
+    //         '
+    //         '''
+    //   }
+    // }
 
-  //   stage('Show Traffic Weights (from Git overlay)') {
-  //     steps {
-  //       sh '''set -eu pipefail
+    // stage('Show Traffic Weights (from Git overlay)') {
+    //   steps {
+    //     sh '''set -eu pipefail
 
-  //           ING="${APP_NAME}-ingress"
-  //           # Read the forward action annotation from the live Ingress (commit-driven)
-  //           ANN=$(kubectl get ing/${ING} -n ${K8S_NAMESPACE} -o jsonpath="{.metadata.annotations.alb\\.ingress\\.kubernetes\\.io/actions\\.forward-blue-green}" || true)
-  //           echo "Current ALB forward weights (live): ${ANN}"
-  //       '''
-  //     }
-  //   }
+    //         ING="${APP_NAME}-ingress"
+    //         # Read the forward action annotation from the live Ingress (commit-driven)
+    //         ANN=$(kubectl get ing/${ING} -n ${K8S_NAMESPACE} -o jsonpath="{.metadata.annotations.alb\\.ingress\\.kubernetes\\.io/actions\\.forward-blue-green}" || true)
+    //         echo "Current ALB forward weights (live): ${ANN}"
+    //     '''
+    //   }
+    // }
 
 
     
-  //   stage('Optional: Scale down OLD color') {
-  //     when { expression { return env.SCALE_DOWN_OLD == 'true' } }
-  //     steps {
-  //       sh '''set -eu pipefail
-  //         if [ "${TARGET_COLOR}" = "green" ]; then
-  //           kubectl scale deployment/${APP_NAME}-blue -n ${K8S_NAMESPACE} --replicas=0 || true
-  //         else
-  //           kubectl scale deployment/${APP_NAME}-green -n ${K8S_NAMESPACE} --replicas=0 || true
-  //         fi
-  //       '''
-  //     }
-  //   }
-  // }
+    // stage('Optional: Scale down OLD color') {
+    //   when { expression { return env.SCALE_DOWN_OLD == 'true' } }
+    //   steps {
+    //     sh '''set -eu pipefail
+    //       if [ "${TARGET_COLOR}" = "green" ]; then
+    //         kubectl scale deployment/${APP_NAME}-blue -n ${K8S_NAMESPACE} --replicas=0 || true
+    //       else
+    //         kubectl scale deployment/${APP_NAME}-green -n ${K8S_NAMESPACE} --replicas=0 || true
+    //       fi
+    //     '''
+    //   }
+    // }
+  }
 
   post {
     failure {
