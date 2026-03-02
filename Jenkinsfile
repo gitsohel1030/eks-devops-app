@@ -297,13 +297,19 @@ pipeline {
 
     stage('Show Traffic Weights (from Git overlay)') {
       steps {
-        sh '''set -eu pipefail
+        script {
+          def ing = "${env.APP_NAME}-ingress"
 
-            ING="${APP_NAME}-ingress"
-            # Read the forward action annotation from the live Ingress (commit-driven)
-            ANN=$(kubectl get ing/${ING} -n ${K8S_NAMESPACE} -o jsonpath="{.metadata.annotations.alb\\.ingress\\.kubernetes\\.io/actions\\.forward-blue-green}" || true)
-            echo "Current ALB forward weights (live): ${ANN}"
-        '''
+          def ann = sh(
+            script: """
+              kubectl get ingress ${ing} -n ${env.K8S_NAMESPACE} \
+              -o jsonpath='{.metadata.annotations.alb\\.ingress\\.kubernetes\\.io/actions\\.forward-blue-green}' 2>/dev/null || true
+            """,
+            returnStdout: true
+          ).trim()
+
+          echo "Current ALB forward weights (live): ${ann ?: 'NOT SET'}"
+        }
       }
     }
 
@@ -312,43 +318,75 @@ pipeline {
     stage('Optional: Scale down OLD color') {
       when { expression { return env.SCALE_DOWN_OLD == 'true' } }
       steps {
-        sh '''set -eu pipefail
-          if [ "${TARGET_COLOR}" = "green" ]; then
-            kubectl scale deployment/${APP_NAME}-blue -n ${K8S_NAMESPACE} --replicas=0 || true
-          else
-            kubectl scale deployment/${APP_NAME}-green -n ${K8S_NAMESPACE} --replicas=0 || true
-          fi
-        '''
+        script {
+
+          def oldColor = (env.TARGET_COLOR == "green") ? "blue" : "green"
+          def deploy = "${env.APP_NAME}-${oldColor}"
+
+          echo "Scaling down OLD color deployment: ${deploy}"
+
+          sh """
+            kubectl scale deployment/${deploy} -n ${env.K8S_NAMESPACE} --replicas=0
+          """
+        }
       }
     }
+
   }
 
   post {
     failure {
-      echo "Pipeline failed. Printing diagnostics…"
-      sh '''set -eu pipefail
+      script {
+        echo "======== PIPELINE FAILED — DEBUGGING ========"
 
-        echo "----- Deploy diagnostics -----"
+        // 1. Deployments
+        sh """
+          kubectl get deploy -n ${env.K8S_NAMESPACE} -l app=${env.APP_NAME} -o wide || true
+        """
 
-        kubectl get deploy -n ${K8S_NAMESPACE} -l app=${APP_NAME} -o wide || true
-        kubectl describe deploy/${APP_NAME}-${TARGET_COLOR} -n ${K8S_NAMESPACE} || true
+        def targetDeploy = "${env.APP_NAME}-${env.TARGET_COLOR}"
 
-        POD="$(kubectl get pod -n ${K8S_NAMESPACE} -l app=${APP_NAME},version=${TARGET_COLOR} -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || true)"
+        // 2. Describe target deployment
+        sh """
+          kubectl describe deploy/${targetDeploy} -n ${env.K8S_NAMESPACE} || true
+        """
 
-        if [ -n "${POD:-}" ]; then
-          kubectl describe pod/${POD} -n ${K8S_NAMESPACE} || true
-          kubectl logs ${POD} -n ${K8S_NAMESPACE} --tail=200 || true
-        fi
-          echo "----- Recent events -----"
-          kubectl get events -n ${K8S_NAMESPACE} --sort-by=.lastTimestamp | tail -n 100 || true
-          echo "----- Ingress annotation (weights) -----"
-          kubectl get ing/${APP_NAME}-ingress -n ${K8S_NAMESPACE} -o jsonpath="{.metadata.annotations.alb\\.ingress\\.kubernetes\\.io/actions\\.forward-blue-green}" || true
-          echo
-          echo "Note: Traffic weights are commit-driven via traffic-patch.yaml. Revert in Git to roll back weights."
-      '''
+        // 3. Find pod
+        def pod = sh(
+          script: """
+            kubectl get pod -n ${env.K8S_NAMESPACE} \
+            -l app=${env.APP_NAME},version=${env.TARGET_COLOR} \
+            -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || true
+          """,
+          returnStdout: true
+        ).trim()
+
+        if (pod) {
+          echo "Inspecting pod: ${pod}"
+
+          sh "kubectl describe pod/${pod} -n ${env.K8S_NAMESPACE} || true"
+          sh "kubectl logs ${pod} -n ${env.K8S_NAMESPACE} --tail=200 || true"
+        } else {
+          echo "No pod found for TARGET_COLOR ${env.TARGET_COLOR}"
+        }
+
+        // 4. Events
+        sh """
+          echo "----- Recent Events -----"
+          kubectl get events -n ${env.K8S_NAMESPACE} --sort-by=.lastTimestamp | tail -n 100 || true
+        """
+
+        // 5. Ingress weights
+        sh """
+          echo "----- Ingress Weights -----"
+          kubectl get ing/${env.APP_NAME}-ingress -n ${env.K8S_NAMESPACE} \
+          -o jsonpath='{.metadata.annotations.alb\\.ingress\\.kubernetes\\.io/actions\\.forward-blue-green}' || true
+        """
+      }
     }
+
     success {
-      echo "Kustomize-based blue/green rollout complete. Target color: ${TARGET_COLOR}, Image: ${IMAGE_TAG}.."
+      echo "Kustomize blue/green rollout SUCCESS — Target color: ${env.TARGET_COLOR}, Image: ${env.IMAGE_TAG}"
     }
   }
 }
