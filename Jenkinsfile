@@ -221,39 +221,27 @@ pipeline {
 
 
 
-    stage('Determine TARGET Color') {
+    stage('Determine TARGET color (shell-safe)') {
       steps {
         script {
-          def path = "k8s/overlays/prod/release.yaml"
-
-          if (!fileExists(path)) {
-            error "${path} not found in workspace"
-          }
-
-          def release = readYaml(file: path)
-
-          echo "release type = ${release?.getClass()}"
-          echo "release keys = ${release instanceof Map ? release.keySet() : 'NOT A MAP'}"
-          echo "release raw  = ${release}"
-
-          def active = (release instanceof Map) ? release['activeColor'] : null
-          active = active?.toString()?.trim()
-
+          def active = sh(
+            script: "grep activeColor k8s/overlays/prod/release.yaml | awk '{print \$2}'",
+            returnStdout: true
+          ).trim()
+    
           if (!active) {
-            error " activeColor missing or empty in ${path}. Parsed keys: ${release?.keySet()}"
+            error "activeColor not found in release.yaml"
           }
-
+    
           env.CURRENT_COLOR = active
           env.TARGET_COLOR  = (active == "blue") ? "green" : "blue"
-
-          echo "Active Color: \${env.CURRENT_COLOR}"
-          echo "Target Color: \${env.TARGET_COLOR}"
-
-          // Optional: persist for shell steps as a backup (prevents env loss issues)
-          writeFile file: '.colors.env', text: "CURRENT_COLOR=${env.CURRENT_COLOR}\nTARGET_COLOR=${env.TARGET_COLOR}\n"
+    
+          echo "Active Color (Git): ${env.CURRENT_COLOR}"
+          echo "Target Color (Calculated): ${env.TARGET_COLOR}"
         }
       }
     }
+ 
     
  
 
