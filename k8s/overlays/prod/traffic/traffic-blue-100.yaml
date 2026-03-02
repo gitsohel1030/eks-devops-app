@@ -5,6 +5,6 @@ metadata:
   annotations:
     alb.ingress.kubernetes.io/actions.forward-blue-green: >
       {"type":"forward","forwardConfig":{"targetGroups":[
-      {"serviceName":"web-svc-blue","servicePort":"80","weight":100},
-      {"serviceName":"web-svc-green","servicePort":"80","weight":0}
+        {"serviceName":"web-svc-blue","servicePort":"80","weight":100},
+        {"serviceName":"web-svc-green","servicePort":"80","weight":0}
       ]}}

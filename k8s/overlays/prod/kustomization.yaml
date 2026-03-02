@@ -20,12 +20,12 @@ labels:
 
 
 patches:
-  - path: patch-blue-image.yaml
+  - path: patch-blue-image.yaml    
+    target:
+      kind: Deployment
+      name: web-app-blue
 
-  - target:
-      group: networking.k8s.io
-      version: v1
+  - path: traffic/traffic-blue-100.yaml
+    target:
       kind: Ingress
       name: web-app-ingress
-      namespace: prod-app
-    path: traffic/traffic-blue-100.yaml
