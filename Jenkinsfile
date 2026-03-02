@@ -338,7 +338,7 @@ pipeline {
           def ann = sh(
             script: """
               kubectl get ingress ${ing} -n ${env.K8S_NAMESPACE} \
-              -o jsonpath='{.metadata.annotations.alb\\.ingress\\.kubernetes\\.io/actions\\.forward-blue-green}' 2>/dev/null || true
+              -o jsonpath="{.metadata.annotations.alb\\.ingress\\.kubernetes\\.io/actions\\.forward-blue-green}" 2>/dev/null || true
             """,
             returnStdout: true
           ).trim()
