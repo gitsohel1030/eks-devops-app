@@ -231,13 +231,13 @@ pipeline {
         sh label: 'Build and Apply Kustomize', script: '''
             bash -c '
               
-              export TARGET_COLOR="${TARGET_COLOR}"
-              export CURRENT_COLOR="${CURRENT_COLOR}"
-              export IMAGE_TAG="${IMAGE_TAG}"
+              export TARGET_COLOR="\${TARGET_COLOR}"
+              export CURRENT_COLOR="\${CURRENT_COLOR}"
+              export IMAGE_TAG="\${IMAGE_TAG}"
 
-              echo "DEBUG: TARGET_COLOR=$TARGET_COLOR"
-              echo "DEBUG: CURRENT_COLOR=$CURRENT_COLOR"
-              echo "DEBUG: IMAGE_TAG=$IMAGE_TAG"
+              echo "DEBUG: TARGET_COLOR=\$TARGET_COLOR"
+              echo "DEBUG: CURRENT_COLOR=\$CURRENT_COLOR"
+              echo "DEBUG: IMAGE_TAG=\$IMAGE_TAG"
 
               set -eu -o pipefail
 
