@@ -246,8 +246,8 @@ pipeline {
           env.CURRENT_COLOR = active
           env.TARGET_COLOR  = (active == "blue") ? "green" : "blue"
 
-          echo "Active Color: ${env.CURRENT_COLOR}"
-          echo "Target Color: ${env.TARGET_COLOR}"
+          echo "Active Color: \${env.CURRENT_COLOR}"
+          echo "Target Color: \${env.TARGET_COLOR}"
 
           // Optional: persist for shell steps as a backup (prevents env loss issues)
           writeFile file: '.colors.env', text: "CURRENT_COLOR=${env.CURRENT_COLOR}\nTARGET_COLOR=${env.TARGET_COLOR}\n"
