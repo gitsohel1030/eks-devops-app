@@ -262,6 +262,13 @@ pipeline {
     stage('Commit GitOps changes') {
       steps {
         script {
+          
+          sh """
+            rm -rf eks-devops-gitops
+            git clone git@github.com:gitsohel1030/eks-devops-gitops.git
+          """
+
+
 
           // 1. Go to repo root
           sh "cd eks-devops-gitops"
