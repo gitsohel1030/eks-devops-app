@@ -281,38 +281,46 @@ pipeline {
     // WHY: ArgoCD triggers on Git change
     // -------------------------------------------------------------
     stage('Commit GitOps changes') {
-      steps {
-        script {
-          
-          // sh """
-          //   rm -rf eks-devops-gitops
-          //   git clone git@github.com:gitsohel1030/eks-devops-gitops.git
-          // """
+      steps {        
+        withCredentials([sshUserPrivateKey(credentialsId: 'githubSSHPvtKey', keyFileVariable: 'SSH_KEY')]) {
+          script {
+
+            sh """
+              set -eu pipefail
+              # SSH setup
+              mkdir -p ~/.ssh
+              ssh-keyscan github.com >> ~/.ssh/known_hosts
+
+              eval \$(ssh-agent -s)
+              ssh-add \$SSH_KEY
+            """
 
 
 
-          // 1. Go to repo root
-          sh "cd eks-devops-gitops"
+            // 1. Go to repo root
+            sh "cd eks-devops-gitops"
 
-          // 2. Make sure we are on main BEFORE modifications
-          sh """
-            git checkout main
-            git pull origin main
-          """
+            // 2. Make sure we are on main BEFORE modifications
+            sh """
+              git checkout main
+              git pull origin main
+            """
 
-          // 3. Apply modifications here (image tags, traffic patches, release.yaml)
+            // 3. Apply modifications here (image tags, traffic patches, release.yaml)
 
-          // 4. Commit & push
-          sh """
-            git config user.email ${env.GIT_EMAIL}
-            git config user.name ${env.GIT_USER}
+            // 4. Commit & push
+            sh """
+              set -eu pipefail
+              git config user.email ${env.GIT_EMAIL}
+              git config user.name ${env.GIT_USER}
 
-            git add k8s/overlays/prod/release.yaml
-            git add k8s/overlays/prod/patch-${TARGET_COLOR}-image.yaml
+              git add k8s/overlays/prod/release.yaml
+              git add k8s/overlays/prod/patch-${TARGET_COLOR}-image.yaml
 
-            git commit -m "Deploy ${IMAGE_TAG} to ${TARGET_COLOR} via GitOps" || true
-            git push origin main
-          """
+              git commit -m "Deploy ${IMAGE_TAG} to ${TARGET_COLOR} via GitOps" || true
+              git push origin main
+            """
+          }
         }
       }
     }
