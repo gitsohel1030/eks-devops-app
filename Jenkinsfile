@@ -13,6 +13,11 @@ pipeline {
     DEPLOY_NEEDED  = "true"
     K8S_NAMESPACE  = "prod-app"
 
+    
+    GIT_EMAIL      = "sohelmujawar172@gmai.com"
+    GIT_USER       = "Sohel"
+
+
     // App/K8s naming
     APP_NAME        = "web-app"          // base name for deployments
     SERVICE_NAME    = "web-svc"        // the stable Service the ALB/Ingress points to
@@ -224,204 +229,81 @@ pipeline {
     }   
  
 
-    stage('Build & Apply Kustomize Overlay') {
+    // -------------------------------------------------------------
+    // 5. Update Git Manifests for GitOps Sync
+    // WHY: Git is the ONLY source of truth in GitOps.
+    // WHAT: Update release.yaml + patch-<color>-image.yaml
+    // -------------------------------------------------------------
+    stage('Update Git Manifests (GitOps)') {
       steps {
         script {
 
-          echo "CURRENT_COLOR  = ${env.CURRENT_COLOR}"
-          echo "TARGET_COLOR   = ${env.TARGET_COLOR}"
-          echo "IMAGE_TAG      = ${env.IMAGE_TAG}"
-
-          def OUT = "k8s/.out/prod"
-
-          // 1. Prepare build directory
-          sh "rm -rf ${OUT}"
-          sh "mkdir -p ${OUT}"
-
-          // 2. Copy overlay
-          sh "cp -R k8s/overlays/prod/* ${OUT}/"
-
-          // ------------------------------------------------------------
-          // 3. SELECT IMAGE PATCH BASED ON TARGET COLOR
-          // ------------------------------------------------------------
-
-          def imagePatch = (env.TARGET_COLOR == "green")
-              ? "patch-green-image.yaml"
-              : "patch-blue-image.yaml"
-
-          echo "Using Image Patch: ${imagePatch}"
-
-          // Swap correct image patch in kustomization.yaml
+          // ---- UPDATE release.yaml (blue -> green or vice versa)
           sh """
-            sed -i 's|patch-blue-image.yaml|${imagePatch}|' ${OUT}/kustomization.yaml
-            sed -i 's|patch-green-image.yaml|${imagePatch}|' ${OUT}/kustomization.yaml
+            yq -i '.activeColor = "${env.TARGET_COLOR}"' k8s/overlays/prod/release.yaml
           """
 
-          // Stamp image tag into selected patch file
-          sh """
-            sed -i 's|__IMAGE_TAG__|${env.IMAGE_TAG}|' ${OUT}/${imagePatch}
-          """
-
-          // ------------------------------------------------------------
-          // 4. SELECT TRAFFIC PATCH BASED ON TARGET COLOR
-          // ------------------------------------------------------------
-
-          def trafficPatch = (env.TARGET_COLOR == "green")
-              ? "traffic/traffic-green-100.yaml"
-              : "traffic/traffic-blue-100.yaml"
-
-          echo "Using Traffic Patch: ${trafficPatch}"
-
-          // Replace current traffic patch in kustomization.yaml
-          sh """
-            sed -i 's|traffic/traffic-blue-100.yaml|${trafficPatch}|' ${OUT}/kustomization.yaml
-            sed -i 's|traffic/traffic-green-100.yaml|${trafficPatch}|' ${OUT}/kustomization.yaml
-          """
-
-          // ------------------------------------------------------------
-          // 5. PREVIEW
-          // ------------------------------------------------------------
-
-          // echo "=== KUSTOMIZE PREVIEW ==="
-          // sh "kubectl kustomize ${OUT} | head -n 200"
-
-          // echo "=== DIFF VS CLUSTER ==="
-          // sh "kubectl diff -k ${OUT} || true"
-
-          // ------------------------------------------------------------
-          // 6. APPLY
-          // ------------------------------------------------------------
-          echo "=== APPLYING OVERLAY ==="
-          sh "kubectl apply -k ${OUT}"
-
-          // ------------------------------------------------------------
-          // 7. WAIT FOR ROLLOUT
-          // ------------------------------------------------------------
-
-          def deployName = "${env.APP_NAME}-${env.TARGET_COLOR}"
-
-          echo "Waiting for rollout of Deployment: ${deployName}"
+          // ---- UPDATE image tag in correct image patch
+          def patchFile = "k8s/overlays/prod/patch-${env.TARGET_COLOR}-image.yaml"
 
           sh """
-            kubectl rollout status deploy/${deployName} \
-            -n ${env.K8S_NAMESPACE} --timeout=4m
+            sed -i 's|__IMAGE_TAG__|${env.IMAGE_TAG}|g' ${patchFile}
           """
 
-          // ------------------------------------------------------------
-          // 8. Change Cause Annotation
-          // ------------------------------------------------------------
-
-          sh """
-            kubectl annotate deploy/${deployName} \
-            -n ${env.K8S_NAMESPACE} \
-            kubernetes.io/change-cause="Deploy ${env.IMAGE_TAG} to ${env.TARGET_COLOR}" \
-            --overwrite || true
-          """
-
-          // ------------------------------------------------------------
-          // 9. Post Deploy Pods
-          // ------------------------------------------------------------
-
-          echo "=== PODS AFTER DEPLOY ==="
-          sh "kubectl get pods -n ${env.K8S_NAMESPACE} -l app=${env.APP_NAME} -o wide"
-
+          echo "Updated ${patchFile}"
         }
       }
     }
 
-
-    stage('Show Traffic Weights (from Git overlay)') {
+    // -------------------------------------------------------------
+    // 6. Commit & Push Changes
+    // WHY: ArgoCD triggers on Git change
+    // -------------------------------------------------------------
+    stage('Git Commit & Push') {
       steps {
         script {
-          def ing = "${env.APP_NAME}-ingress"
-
-          def ann = sh(
-            script: """
-              kubectl get ingress ${ing} -n ${env.K8S_NAMESPACE} \
-              -o jsonpath="{.metadata.annotations.alb\\.ingress\\.kubernetes\\.io/actions\\.forward-blue-green}" 2>/dev/null || true
-            """,
-            returnStdout: true
-          ).trim()
-
-          echo "Current ALB forward weights (live): ${ann ?: 'NOT SET'}"
-        }
-      }
-    }
-
-
-    
-    stage('Optional: Scale down OLD color') {
-      when { expression { return env.SCALE_DOWN_OLD == 'true' } }
-      steps {
-        script {
-
-          def oldColor = (env.TARGET_COLOR == "green") ? "blue" : "green"
-          def deploy = "${env.APP_NAME}-${oldColor}"
-
-          echo "Scaling down OLD color deployment: ${deploy}"
-
           sh """
-            kubectl scale deployment/${deploy} -n ${env.K8S_NAMESPACE} --replicas=0
+            git config user.email "${GIT_EMAIL}"
+            git config user.name "${GIT_USER}"
+
+            git add k8s/overlays/prod/release.yaml
+            git add k8s/overlays/prod/patch-${env.TARGET_COLOR}-image.yaml
+
+            git commit -m "Deploy ${env.IMAGE_TAG} to ${env.TARGET_COLOR} via GitOps"
+            git push origin main
           """
         }
       }
     }
 
+    // -------------------------------------------------------------
+    // 7. ArgoCD Notes (Informational)
+    // WHY: Deployment is now fully GitOps-driven.
+    // -------------------------------------------------------------
+    stage('GitOps Info') {
+      steps {
+        echo """
+        🚀 GitOps Update Complete!
+        ArgoCD is now responsible for syncing these changes to the cluster.
+
+        Deployment Flow:
+        Jenkins → Git Commit → ArgoCD Auto-Sync → Kubernetes
+
+        New ACTIVE COLOR will be after ArgoCD sync: ${env.TARGET_COLOR}
+        """
+      }
+    }
   }
 
+  // -------------------------------------------------------------
+  // POST STEPS
+  // -------------------------------------------------------------
   post {
-    failure {
-      script {
-        echo "======== PIPELINE FAILED — DEBUGGING ========"
-
-        // 1. Deployments
-        sh """
-          kubectl get deploy -n ${env.K8S_NAMESPACE} -l app=${env.APP_NAME} -o wide || true
-        """
-
-        def targetDeploy = "${env.APP_NAME}-${env.TARGET_COLOR}"
-
-        // 2. Describe target deployment
-        sh """
-          kubectl describe deploy/${targetDeploy} -n ${env.K8S_NAMESPACE} || true
-        """
-
-        // 3. Find pod
-        def pod = sh(
-          script: """
-            kubectl get pod -n ${env.K8S_NAMESPACE} \
-            -l app=${env.APP_NAME},version=${env.TARGET_COLOR} \
-            -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || true
-          """,
-          returnStdout: true
-        ).trim()
-
-        if (pod) {
-          echo "Inspecting pod: ${pod}"
-
-          sh "kubectl describe pod/${pod} -n ${env.K8S_NAMESPACE} || true"
-          sh "kubectl logs ${pod} -n ${env.K8S_NAMESPACE} --tail=200 || true"
-        } else {
-          echo "No pod found for TARGET_COLOR ${env.TARGET_COLOR}"
-        }
-
-        // 4. Events
-        sh """
-          echo "----- Recent Events -----"
-          kubectl get events -n ${env.K8S_NAMESPACE} --sort-by=.lastTimestamp | tail -n 100 || true
-        """
-
-        // 5. Ingress weights
-        sh """
-          echo "----- Ingress Weights -----"
-          kubectl get ing/${env.APP_NAME}-ingress -n ${env.K8S_NAMESPACE} \
-          -o jsonpath='{.metadata.annotations.alb\\.ingress\\.kubernetes\\.io/actions\\.forward-blue-green}' || true
-        """
-      }
-    }
-
     success {
-      echo "Kustomize blue/green rollout SUCCESS — Target color: ${env.TARGET_COLOR}, Image: ${env.IMAGE_TAG}"
+      echo "GitOps Blue/Green update complete — Target Color: ${env.TARGET_COLOR}"
+    }
+    failure {
+      echo "❌ Something went wrong during GitOps update."
     }
   }
 }
