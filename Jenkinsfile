@@ -243,61 +243,68 @@ pipeline {
 
           withCredentials([sshUserPrivateKey(credentialsId: 'github-ssh-gitops', keyFileVariable: 'SSH_KEY')]) {
 
-            // SSH Setup (inside script)
-            sh '''
+            // -------------------------
+            // 1. Write SSH key to file
+            // -------------------------
+            writeFile file: 'gitops_key', text: readFile(SSH_KEY)
+            sh "chmod 600 gitops_key"
+
+            // -------------------------
+            // 2. SSH agent + known_hosts
+            // -------------------------
+            sh """
               mkdir -p ~/.ssh
               ssh-keyscan github.com >> ~/.ssh/known_hosts
+            """
+
+            sh '''
+              eval $(ssh-agent -s)
+              ssh-add gitops_key
             '''
 
-            
-            sh(script: '''
-                eval $(ssh-agent -s)
-                ssh-add $SSH_KEY
-              ''')
+            // -------------------------
+            // 3. Fresh clone GitOps repo
+            // -------------------------
+            sh "rm -rf ${GITOPS_DIR}"
+            sh "git clone ${GITOPS_REPO} ${GITOPS_DIR}"
 
-
-            // Fresh clone
-            
-            sh(script: """
-                rm -rf ${GITOPS_DIR}
-                git clone ${GITOPS_REPO} ${GITOPS_DIR}
-              """)
-
-
-            // Move into repo
+            // -------------------------
+            // 4. Enter GitOps repo
+            // -------------------------
             dir("${GITOPS_DIR}") {
 
-              // Ensure remote is correct
+              // Ensure remote is SSH
               sh "git remote set-url origin ${GITOPS_REPO}"
 
-              // Checkout + Pull latest main
+              // Clean + Checkout main
               sh "git checkout main"
-              sh "git pull origin main"
+              sh "git pull origin main || true"
 
-              // Modify release.yaml
-              script {
-                def relFile = "k8s/overlays/prod/release.yaml"
-                def relContent = readFile(relFile)
-                relContent = relContent.replaceAll(/activeColor:.*/, "activeColor: ${TARGET_COLOR}")
-                writeFile file: relFile, text: relContent
-              }
+              // -------------------------
+              // 5. Modify release.yaml (activeColor)
+              // -------------------------
+              def relFile = "k8s/overlays/prod/release.yaml"
+              def relContent = readFile(relFile)
+              relContent = relContent.replaceAll(/activeColor:.*/, "activeColor: ${TARGET_COLOR}")
+              writeFile file: relFile, text: relContent
 
-              // Modify patch-<color>-image.yaml
-              script {
-                def patchFile = "k8s/overlays/prod/patch-${TARGET_COLOR}-image.yaml"
-                def patchContent = readFile(patchFile)
-                patchContent = patchContent.replaceAll(/__IMAGE_TAG__/, IMAGE_TAG)
-                writeFile file: patchFile, text: patchContent
-              }
+              // -------------------------
+              // 6. Modify patch-<color>-image.yaml
+              // -------------------------
+              def patchFile = "k8s/overlays/prod/patch-${TARGET_COLOR}-image.yaml"
+              def patchContent = readFile(patchFile)
+              patchContent = patchContent.replaceAll(/__IMAGE_TAG__/, IMAGE_TAG)
+              writeFile file: patchFile, text: patchContent
 
-              // Git Config
-              sh "git config user.email ${GIT_EMAIL}"
-              sh "git config user.name ${GIT_USER}"
+              // -------------------------
+              // 7. Git Commit + Push
+              // -------------------------
+              sh "git config user.email '${GIT_EMAIL}'"
+              sh "git config user.name '${GIT_USER}'"
 
-              // Commit & Push
               sh "git add ."
               sh """
-                git commit -m "GitOps deploy ${IMAGE_TAG} to ${TARGET_COLOR}" || true
+                git commit -m 'GitOps deploy ${IMAGE_TAG} to ${TARGET_COLOR}' || true
               """
               sh "git push origin main"
             }
