@@ -263,7 +263,7 @@ pipeline {
       steps {
         script {
           sh """
-            git checkout main || git checkout -b main
+            git checkout main
             git config user.email "${GIT_EMAIL}"
             git config user.name "${GIT_USER}"
 
