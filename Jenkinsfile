@@ -301,7 +301,8 @@ pipeline {
             sh "cd eks-devops-gitops"
 
             // 2. Make sure we are on main BEFORE modifications
-            sh """
+            sh """                            
+              git remote set-url origin git@github.com:gitsohel1030/eks-devops-gitops.git
               git checkout main
               git pull origin main
             """
