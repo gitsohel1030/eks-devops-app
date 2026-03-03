@@ -278,7 +278,7 @@ pipeline {
 
     // -------------------------------------------------------------
     // 6. Commit & Push Changes
-    // WHY: ArgoCD triggers on Git change...
+    // WHY: ArgoCD triggers on Git change.
     // -------------------------------------------------------------
     stage('Commit GitOps changes') {
       steps {
