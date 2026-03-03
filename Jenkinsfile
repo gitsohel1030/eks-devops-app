@@ -243,69 +243,84 @@ pipeline {
 
           withCredentials([sshUserPrivateKey(credentialsId: 'github-ssh-gitops', keyFileVariable: 'SSH_KEY')]) {
 
-            // -------------------------
-            // 1. Write SSH key to file
-            // -------------------------
-            writeFile file: 'gitops_key', text: readFile(SSH_KEY)
+            //
+            // 1. Write SSH key to a local file
+            //
+            def keyText = readFile(SSH_KEY)
+            writeFile file: 'gitops_key', text: keyText
             sh "chmod 600 gitops_key"
 
-            // -------------------------
-            // 2. SSH agent + known_hosts
-            // -------------------------
-
+            //
+            // 2. Ensure known_hosts exists
+            //
             sh """
-                  sudo -u jenkins bash -c '
-                    mkdir -p /var/lib/jenkins/.ssh
-                    ssh-keyscan github.com >> /var/lib/jenkins/.ssh/known_hosts
+              mkdir -p ~/.ssh
+              ssh-keyscan github.com >> ~/.ssh/known_hosts
+            """
 
-                    eval \$(ssh-agent -s)
-                    ssh-add gitops_key
+            //
+            // 3. Fresh clone using explicit SSH key (NO ssh-agent needed)
+            //
+            sh """
+              rm -rf ${GITOPS_DIR}
+              GIT_SSH_COMMAND='ssh -i gitops_key -o StrictHostKeyChecking=no' \
+              git clone ${GITOPS_REPO} ${GITOPS_DIR}
+            """
 
-                    rm -rf ${GITOPS_DIR}
-                    git clone ${GITOPS_REPO} ${GITOPS_DIR}
-                  '
-                """
-
-
-            // -------------------------
+            //
             // 4. Enter GitOps repo
-            // -------------------------
+            //
             dir("${GITOPS_DIR}") {
 
-              // Ensure remote is SSH
+              //
+              // Ensure remote uses SSH
+              //
               sh "git remote set-url origin ${GITOPS_REPO}"
 
-              // Clean + Checkout main
-              sh "git checkout main"
-              sh "git pull origin main || true"
+              //
+              // Checkout & pull main (using same SSH key)
+              //
+              sh """
+                GIT_SSH_COMMAND='ssh -i ../gitops_key -o StrictHostKeyChecking=no' \
+                git checkout main
+              """
 
-              // -------------------------
-              // 5. Modify release.yaml (activeColor)
-              // -------------------------
+              sh """
+                GIT_SSH_COMMAND='ssh -i ../gitops_key -o StrictHostKeyChecking=no' \
+                git pull origin main || true
+              """
+
+              //
+              // Update release.yaml
+              //
               def relFile = "k8s/overlays/prod/release.yaml"
               def relContent = readFile(relFile)
               relContent = relContent.replaceAll(/activeColor:.*/, "activeColor: ${TARGET_COLOR}")
               writeFile file: relFile, text: relContent
 
-              // -------------------------
-              // 6. Modify patch-<color>-image.yaml
-              // -------------------------
+              //
+              // Update patch-<color>-image.yaml
+              //
               def patchFile = "k8s/overlays/prod/patch-${TARGET_COLOR}-image.yaml"
               def patchContent = readFile(patchFile)
               patchContent = patchContent.replaceAll(/__IMAGE_TAG__/, IMAGE_TAG)
               writeFile file: patchFile, text: patchContent
 
-              // -------------------------
-              // 7. Git Commit + Push
-              // -------------------------
+              //
+              // Git config
+              //
               sh "git config user.email '${GIT_EMAIL}'"
               sh "git config user.name '${GIT_USER}'"
 
-              sh "git add ."
+              //
+              // Commit & push (explicit SSH key)
+              //
               sh """
+                git add .
                 git commit -m 'GitOps deploy ${IMAGE_TAG} to ${TARGET_COLOR}' || true
+                GIT_SSH_COMMAND='ssh -i ../gitops_key -o StrictHostKeyChecking=no' \
+                git push origin main
               """
-              sh "git push origin main"
             }
           }
         }
