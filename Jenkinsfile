@@ -252,21 +252,20 @@ pipeline {
             // -------------------------
             // 2. SSH agent + known_hosts
             // -------------------------
+
             sh """
-              mkdir -p ~/.ssh
-              ssh-keyscan github.com >> ~/.ssh/known_hosts
-            """
+                  sudo -u jenkins bash -c '
+                    mkdir -p /var/lib/jenkins/.ssh
+                    ssh-keyscan github.com >> /var/lib/jenkins/.ssh/known_hosts
 
-            sh '''
-              eval $(ssh-agent -s)
-              ssh-add gitops_key
-            '''
+                    eval \$(ssh-agent -s)
+                    ssh-add gitops_key
 
-            // -------------------------
-            // 3. Fresh clone GitOps repo
-            // -------------------------
-            sh "rm -rf ${GITOPS_DIR}"
-            sh "git clone ${GITOPS_REPO} ${GITOPS_DIR}"
+                    rm -rf ${GITOPS_DIR}
+                    git clone ${GITOPS_REPO} ${GITOPS_DIR}
+                  '
+                """
+
 
             // -------------------------
             // 4. Enter GitOps repo
