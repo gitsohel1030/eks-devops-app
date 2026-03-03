@@ -12,11 +12,11 @@ pipeline {
     IMAGE_EXISTS   = "false"
     DEPLOY_NEEDED  = "true"
     K8S_NAMESPACE  = "prod-app"
-
     
-    GIT_EMAIL      = "sohelmujawar172@gmail.com"
-    GIT_USER       = "Sohel"
-
+    GITOPS_REPO     = "git@github.com:gitsohel1030/eks-devops-gitops.git"
+    GITOPS_DIR      = "eks-devops-gitops"
+    GIT_USER        = "Sohel"
+    GIT_EMAIL       = "sohelmujawar172@gmail.com"
 
     // App/K8s naming
     APP_NAME        = "web-app"          // base name for deployments
@@ -234,97 +234,71 @@ pipeline {
     // WHY: Git is the ONLY source of truth in GitOps.
     // WHAT: Update release.yaml + patch-<color>-image.yaml
     // -------------------------------------------------------------
-    stage('Update Git Manifests (GitOps)') {
+    
+    stage('GitOps Update') {
       steps {
         script {
 
-          // ---- UPDATE release.yaml (blue -> green or vice versa)
-          sh """
-            yq eval -i '.activeColor = "${env.TARGET_COLOR}"' k8s/overlays/prod/release.yaml
-          """
+          echo "Preparing to update GitOps repo..."
 
-          // ---- UPDATE image tag in correct image patch
-          def patchFile = "k8s/overlays/prod/patch-${env.TARGET_COLOR}-image.yaml"
+          withCredentials([sshUserPrivateKey(credentialsId: 'github-ssh-gitops', keyFileVariable: 'SSH_KEY')]) {
 
-          sh """
-            sed -i 's|__IMAGE_TAG__|${env.IMAGE_TAG}|g' ${patchFile}
-          """
-
-          echo "Updated ${patchFile}"
-        }
-      }
-    }
-
-
-    stage('Clone GitOps Repo') {
-      steps {
-        withCredentials([sshUserPrivateKey(credentialsId: 'github-ssh-gitops', keyFileVariable: 'SSH_KEY')]) {
-
-          sh """
-            set -eu pipefail
-
-            mkdir -p ~/.ssh
-            ssh-keyscan github.com >> ~/.ssh/known_hosts
-
-            eval \$(ssh-agent -s)
-            ssh-add \$SSH_KEY
-
-            rm -rf eks-devops-gitops
-            git clone git@github.com:gitsohel1030/eks-devops-gitops.git
-          """
-        }
-      }
-    }
-
-    // -------------------------------------------------------------
-    // 6. Commit & Push Changes
-    // WHY: ArgoCD triggers on Git change
-    // -------------------------------------------------------------
-    stage('Commit GitOps changes') {
-      steps {        
-        withCredentials([sshUserPrivateKey(credentialsId: 'github-ssh-gitops', keyFileVariable: 'SSH_KEY')]) {
-          script {
+            // SSH Setup (inside script)
+            sh "mkdir -p ~/.ssh"
+            sh "ssh-keyscan github.com >> ~/.ssh/known_hosts"
 
             sh """
-              set -eu pipefail
-              # SSH setup
-              mkdir -p ~/.ssh
-              ssh-keyscan github.com >> ~/.ssh/known_hosts
-
               eval \$(ssh-agent -s)
-              ssh-add \$SSH_KEY
+              ssh-add ${SSH_KEY}
             """
 
+            // Fresh clone
+            sh "rm -rf ${GITOPS_DIR}"
+            sh "git clone ${GITOPS_REPO} ${GITOPS_DIR}"
 
+            // Move into repo
+            dir("${GITOPS_DIR}") {
 
-            // 1. Go to repo root
-            sh "cd eks-devops-gitops"
+              // Ensure remote is correct
+              sh "git remote set-url origin ${GITOPS_REPO}"
 
-            // 2. Make sure we are on main BEFORE modifications
-            sh """                            
-              git remote set-url origin git@github.com:gitsohel1030/eks-devops-gitops.git
-              git checkout main
-              git pull origin main
-            """
+              // Checkout + Pull latest main
+              sh "git checkout main"
+              sh "git pull origin main"
 
-            // 3. Apply modifications here (image tags, traffic patches, release.yaml)
+              // Modify release.yaml
+              script {
+                def relFile = "k8s/overlays/prod/release.yaml"
+                def relContent = readFile(relFile)
+                relContent = relContent.replaceAll(/activeColor:.*/, "activeColor: ${TARGET_COLOR}")
+                writeFile file: relFile, text: relContent
+              }
 
-            // 4. Commit & push....
-            sh """
-              set -eu pipefail
-              git config user.email ${env.GIT_EMAIL}
-              git config user.name ${env.GIT_USER}
+              // Modify patch-<color>-image.yaml
+              script {
+                def patchFile = "k8s/overlays/prod/patch-${TARGET_COLOR}-image.yaml"
+                def patchContent = readFile(patchFile)
+                patchContent = patchContent.replaceAll(/__IMAGE_TAG__/, IMAGE_TAG)
+                writeFile file: patchFile, text: patchContent
+              }
 
-              git add k8s/overlays/prod/release.yaml
-              git add k8s/overlays/prod/patch-${TARGET_COLOR}-image.yaml
+              // Git Config
+              sh "git config user.email ${GIT_EMAIL}"
+              sh "git config user.name ${GIT_USER}"
 
-              git commit -m "Deploy ${IMAGE_TAG} to ${TARGET_COLOR} via GitOps" || true
-              git push origin main
-            """
+              // Commit & Push
+              sh "git add ."
+              sh """
+                git commit -m "GitOps deploy ${IMAGE_TAG} to ${TARGET_COLOR}" || true
+              """
+              sh "git push origin main"
+            }
           }
         }
       }
     }
+  
+
 
     // -------------------------------------------------------------
     // 7. ArgoCD Notes (Informational)
