@@ -244,17 +244,25 @@ pipeline {
           withCredentials([sshUserPrivateKey(credentialsId: 'github-ssh-gitops', keyFileVariable: 'SSH_KEY')]) {
 
             // SSH Setup (inside script)
-            sh "mkdir -p ~/.ssh"
-            sh "ssh-keyscan github.com >> ~/.ssh/known_hosts"
+            sh '''
+              mkdir -p ~/.ssh
+              ssh-keyscan github.com >> ~/.ssh/known_hosts
+            '''
 
-            sh """
-              eval \$(ssh-agent -s)
-              ssh-add ${SSH_KEY}
-            """
+            
+            sh(script: '''
+                eval $(ssh-agent -s)
+                ssh-add $SSH_KEY
+              ''')
+
 
             // Fresh clone
-            sh "rm -rf ${GITOPS_DIR}"
-            sh "git clone ${GITOPS_REPO} ${GITOPS_DIR}"
+            
+            sh(script: """
+                rm -rf ${GITOPS_DIR}
+                git clone ${GITOPS_REPO} ${GITOPS_DIR}
+              """)
+
 
             // Move into repo
             dir("${GITOPS_DIR}") {
