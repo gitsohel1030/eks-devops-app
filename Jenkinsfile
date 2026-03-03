@@ -258,7 +258,7 @@ pipeline {
 
     stage('Clone GitOps Repo') {
       steps {
-        withCredentials([sshUserPrivateKey(credentialsId: 'githubSSHPvtKey', keyFileVariable: 'SSH_KEY')]) {
+        withCredentials([sshUserPrivateKey(credentialsId: 'github-ssh-gitops', keyFileVariable: 'SSH_KEY')]) {
 
           sh """
             set -eu pipefail
@@ -282,7 +282,7 @@ pipeline {
     // -------------------------------------------------------------
     stage('Commit GitOps changes') {
       steps {        
-        withCredentials([sshUserPrivateKey(credentialsId: 'githubSSHPvtKey', keyFileVariable: 'SSH_KEY')]) {
+        withCredentials([sshUserPrivateKey(credentialsId: 'github-ssh-gitops', keyFileVariable: 'SSH_KEY')]) {
           script {
 
             sh """
