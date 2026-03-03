@@ -255,6 +255,27 @@ pipeline {
       }
     }
 
+
+    stage('Clone GitOps Repo') {
+      steps {
+        withCredentials([sshUserPrivateKey(credentialsId: 'githubSSHPvtKey', keyFileVariable: 'SSH_KEY')]) {
+
+          sh """
+            set -eu pipefail
+
+            mkdir -p ~/.ssh
+            ssh-keyscan github.com >> ~/.ssh/known_hosts
+
+            eval \$(ssh-agent -s)
+            ssh-add \$SSH_KEY
+
+            rm -rf eks-devops-gitops
+            git clone git@github.com:gitsohel1030/eks-devops-gitops.git
+          """
+        }
+      }
+    }
+
     // -------------------------------------------------------------
     // 6. Commit & Push Changes
     // WHY: ArgoCD triggers on Git change...
@@ -263,10 +284,10 @@ pipeline {
       steps {
         script {
           
-          sh """
-            rm -rf eks-devops-gitops
-            git clone git@github.com:gitsohel1030/eks-devops-gitops.git
-          """
+          // sh """
+          //   rm -rf eks-devops-gitops
+          //   git clone git@github.com:gitsohel1030/eks-devops-gitops.git
+          // """
 
 
 
