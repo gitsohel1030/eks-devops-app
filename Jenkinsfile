@@ -259,18 +259,30 @@ pipeline {
     // 6. Commit & Push Changes
     // WHY: ArgoCD triggers on Git change...
     // -------------------------------------------------------------
-    stage('Git Commit & Push') {
+    stage('Commit GitOps changes') {
       steps {
         script {
+
+          // 1. Go to repo root
+          sh "cd eks-devops-gitops"
+
+          // 2. Make sure we are on main BEFORE modifications
           sh """
             git checkout main
-            git config user.email "${GIT_EMAIL}"
-            git config user.name "${GIT_USER}"
+            git pull origin main
+          """
+
+          // 3. Apply modifications here (image tags, traffic patches, release.yaml)
+
+          // 4. Commit & push
+          sh """
+            git config user.email ${env.GIT_EMAIL}
+            git config user.name ${env.GIT_USER}
 
             git add k8s/overlays/prod/release.yaml
-            git add k8s/overlays/prod/patch-${env.TARGET_COLOR}-image.yaml
+            git add k8s/overlays/prod/patch-${TARGET_COLOR}-image.yaml
 
-            git commit -m "Deploy ${env.IMAGE_TAG} to ${env.TARGET_COLOR} via GitOps"
+            git commit -m "Deploy ${IMAGE_TAG} to ${TARGET_COLOR} via GitOps" || true
             git push origin main
           """
         }
