@@ -14,7 +14,7 @@ pipeline {
     K8S_NAMESPACE  = "prod-app"
 
     
-    GIT_EMAIL      = "sohelmujawar172@gmai.com"
+    GIT_EMAIL      = "sohelmujawar172@gmail.com"
     GIT_USER       = "Sohel"
 
 
@@ -240,7 +240,7 @@ pipeline {
 
           // ---- UPDATE release.yaml (blue -> green or vice versa)
           sh """
-            yq -i '.activeColor = "${env.TARGET_COLOR}"' k8s/overlays/prod/release.yaml
+            yq eval -i '.activeColor = "${env.TARGET_COLOR}"' k8s/overlays/prod/release.yaml
           """
 
           // ---- UPDATE image tag in correct image patch
