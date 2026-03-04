@@ -1,6 +1,11 @@
 pipeline {
   agent any
 
+  // parameters {
+  //   booleanParam(name: 'PROMOTE', defaultValue: false, description: 'Promote TARGET color to baseline?')
+  //   booleanParam(name: 'ROLLBACK', defaultValue: false, description: 'Rollback to CURRENT color?')
+  // }
+
   environment {
     AWS_REGION     = "ap-south-1"
     CLUSTER_NAME   = "my-eks-cluster-1030"
@@ -155,59 +160,6 @@ pipeline {
       }
     }
 
-    // stage('Deploy MySQL (dev)') {
-    //   steps {
-    //     withCredentials([
-    //       string(credentialsId: 'mysql-root-password', variable: 'MYSQL_ROOT_PASSWORD'),
-    //       string(credentialsId: 'mysql-app-password',  variable: 'MYSQL_PASSWORD')
-    //     ]) {
-    //       sh '''
-    //         set -eu pipefail
-
-          
-    //         # ConfigMap, PVC, Service
-    //         K8S_NAMESPACE="${K8S_NAMESPACE}" envsubst < k8s/base/db-dev/configmap.yaml | kubectl apply -f -
-    //         K8S_NAMESPACE="${K8S_NAMESPACE}" envsubst < k8s/base/db-dev/pvc.yaml      | kubectl apply -f -
-    //         K8S_NAMESPACE="${K8S_NAMESPACE}" envsubst < k8s/base/db-dev/service.yaml  | kubectl apply -f -
-
-    //         # Secret from Jenkins (dont store in Git)
-    //         kubectl create secret generic mysql-secret \
-    //           -n ${K8S_NAMESPACE} \
-    //           --from-literal=MYSQL_ROOT_PASSWORD="${MYSQL_ROOT_PASSWORD}" \
-    //           --from-literal=MYSQL_PASSWORD="${MYSQL_PASSWORD}" \
-    //           --dry-run=client -o yaml | kubectl apply -f -
-
-    //         # Deployment + PDB
-    //         K8S_NAMESPACE="${K8S_NAMESPACE}" envsubst < k8s/base/db-dev/deployment.yaml | kubectl apply -f -
-    //         K8S_NAMESPACE="${K8S_NAMESPACE}" envsubst < k8s/base/db-dev/pdb.yaml        | kubectl apply -f -
-
-    //         # Wait until ready
-    //         kubectl rollout status deploy/mysql -n ${K8S_NAMESPACE} --timeout=3m
-    //       '''
-    //     }
-    //   }
-    // }
-
-
-    // stage('Apply Services + HPAs') {
-    //   steps {
-    //     sh '''
-    //       set -eu pipefail
-    //       mkdir -p k8s/base/blue-green/rendered
-    //       # services
-    //       APP_NAME="${APP_NAME}" K8S_NAMESPACE="${K8S_NAMESPACE}" envsubst < k8s/base/service-blue.yaml  > k8s/base/blue-green/rendered/service-blue.yaml
-    //       APP_NAME="${APP_NAME}" K8S_NAMESPACE="${K8S_NAMESPACE}" envsubst < k8s/base/service-green.yaml > k8s/base/blue-green/rendered/service-green.yaml
-    //       kubectl apply -f k8s/base/blue-green/rendered/service-blue.yaml
-    //       kubectl apply -f k8s/base/blue-green/rendered/service-green.yaml
-
-    //       # hpas (optional)
-    //       APP_NAME="${APP_NAME}" K8S_NAMESPACE="${K8S_NAMESPACE}" envsubst < k8s/base/blue-green/hpa-blue.yaml  > k8s/base/blue-green/rendered/hpa-blue.yaml
-    //       APP_NAME="${APP_NAME}" K8S_NAMESPACE="${K8S_NAMESPACE}" envsubst < k8s/base/blue-green/hpa-green.yaml > k8s/base/blue-green/rendered/hpa-green.yaml
-    //       kubectl apply -f k8s/base/blue-green/rendered/hpa-blue.yaml
-    //       kubectl apply -f k8s/base/blue-green/rendered/hpa-green.yaml
-    //     '''
-    //   }
-    // }
 
     stage('Determine TARGET color') {
       steps {
@@ -298,13 +250,14 @@ pipeline {
               relContent = relContent.replaceAll(/activeColor:.*/, "activeColor: ${TARGET_COLOR}")
               writeFile file: relFile, text: relContent
 
-              //
-              // Update patch-<color>-image.yaml
-              //
-              def patchFile = "k8s/overlays/prod/patch-${TARGET_COLOR}-image.yaml"
+              // ---- Update image patch for TARGET color only ----
+              def patchFile = "k8s/overlays/prod/patch-${env.TARGET_COLOR}-image.yaml"
+
               def patchContent = readFile(patchFile)
-              patchContent = patchContent.replaceAll(/__IMAGE_TAG__/, IMAGE_TAG)
+              patchContent = patchContent.replaceAll(/__IMAGE_TAG__/ , IMAGE_TAG)
               writeFile file: patchFile, text: patchContent
+
+              echo "Updated image patch → ${patchFile}"
 
               // ---- UPDATE TRAFFIC PATCH ----
               def trafficPatch = (env.TARGET_COLOR == "green")
@@ -339,7 +292,76 @@ pipeline {
       }
     }
   
+    // stage('Promote TARGET Version to Baseline (Manual Trigger)') {
+    //   when {
+    //     expression { return params.PROMOTE == true }
+    //   }
+    //   steps {
+    //     script {
+    //       echo "PROMOTION TRIGGERED: Syncing baseline image..."
 
+    //       def otherColor = (env.TARGET_COLOR == "green") ? "blue" : "green"
+    //       def targetPatch = "k8s/overlays/prod/patch-${env.TARGET_COLOR}-image.yaml"
+    //       def otherPatch  = "k8s/overlays/prod/patch-${otherColor}-image.yaml"
+
+    //       echo "TARGET patch file = ${targetPatch}"
+    //       echo "OTHER  patch file = ${otherPatch}"
+
+    //       // Extract image tag from target patch
+    //       def imageLine = sh(script: "grep 'image:' ${GITOPS_DIR}/${targetPatch}", returnStdout: true).trim()
+    //       def newImage = imageLine.split('image:')[1].trim()
+
+    //       echo "Promoting image: ${newImage}"
+
+    //       // Replace image in other patch
+    //       def otherContent = readFile("${GITOPS_DIR}/${otherPatch}")
+    //       otherContent = otherContent.replaceAll(/image:.*/, "image: ${newImage}")
+    //       writeFile file: "${GITOPS_DIR}/${otherPatch}", text: otherContent
+
+    //       // Commit + Push
+    //       dir
+    //     }
+    //   }
+    // } 
+
+
+    // stage('Rollback to Previous Color (Manual Trigger)') {
+    //   when {
+    //     expression { return params.ROLLBACK == true }
+    //   }
+    //   steps {
+    //     script {
+    //       echo "ROLLBACK TRIGGERED: Switching traffic to previous color..."
+
+    //       def rollbackColor = env.CURRENT_COLOR
+
+    //       // Update traffic patch in kustomization
+    //       def trafficPatch = "traffic/traffic-${rollbackColor}-100.yaml"
+
+    //       sh """
+    //         sed -i 's|traffic/traffic-blue-100.yaml|${trafficPatch}|g' ${GITOPS_DIR}/k8s/overlays/prod/kustomization.yaml
+    //         sed -i 's|traffic/traffic-green-100.yaml|${trafficPatch}|g' ${GITOPS_DIR}/k8s/overlays/prod/kustomization.yaml
+    //       """
+
+    //       // Update release.yaml
+    //       sh """
+    //         sed -i 's|activeColor:.*|activeColor: ${rollbackColor}|' ${GITOPS_DIR}/k8s/overlays/prod/release.yaml
+    //       """
+
+    //       // Commit
+    //       dir("${GITOPS_DIR}") {
+    //         sh "git add ."
+    //         sh "git commit -m 'Rollback to ${rollbackColor}' || true"
+    //         sh """
+    //           GIT_SSH_COMMAND='ssh -i ../gitops_key -o StrictHostKeyChecking=no' \
+    //           git push origin main
+    //         """
+    //       }
+
+    //       echo "ROLLBACK COMPLETE: Traffic will now route to ${rollbackColor} (ArgoCD sync required)."
+    //     }
+    //   }
+    // }
 
     // -------------------------------------------------------------
     // 7. ArgoCD Notes (Informational)
