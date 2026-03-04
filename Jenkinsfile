@@ -306,6 +306,18 @@ pipeline {
               patchContent = patchContent.replaceAll(/__IMAGE_TAG__/, IMAGE_TAG)
               writeFile file: patchFile, text: patchContent
 
+              // ---- UPDATE TRAFFIC PATCH ----
+              def trafficPatch = (env.TARGET_COLOR == "green")
+                  ? "traffic/traffic-green-100.yaml"
+                  : "traffic/traffic-blue-100.yaml"
+
+              sh """
+                sed -i 's|traffic/traffic-blue-100.yaml|${trafficPatch}|g' k8s/overlays/prod/kustomization.yaml
+                sed -i 's|traffic/traffic-green-100.yaml|${trafficPatch}|g' k8s/overlays/prod/kustomization.yaml
+              """
+
+              echo "Updated traffic patch → ${trafficPatch}"
+
               //
               // Git config
               //
