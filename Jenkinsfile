@@ -200,7 +200,7 @@ pipeline {
     stage('Determine TARGET color') {
       steps {
         script {
-          def release = readYaml file: 'k8s/overlays/prod/release.yaml'
+          def release = readYaml file: 'eks-devops-gitops/k8s/overlays/prod/release.yaml'
           def active = release.activeColor
     
           if (!active) {
