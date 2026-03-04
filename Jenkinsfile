@@ -160,6 +160,42 @@ pipeline {
       }
     }
 
+    stage('GitOps Update') {
+      steps {
+        script {
+
+          echo "Preparing to update GitOps repo..."
+
+          withCredentials([sshUserPrivateKey(credentialsId: 'github-ssh-gitops', keyFileVariable: 'SSH_KEY')]) {
+
+            //
+            // 1. Write SSH key to a local file
+            //
+            def keyText = readFile(SSH_KEY)
+            writeFile file: 'gitops_key', text: keyText
+            sh "chmod 600 gitops_key"
+
+            //
+            // 2. Ensure known_hosts exists
+            //
+            sh """
+              mkdir -p ~/.ssh
+              ssh-keyscan github.com >> ~/.ssh/known_hosts
+            """
+
+            //
+            // 3. Fresh clone using explicit SSH key (NO ssh-agent needed)
+            //
+            sh """
+              rm -rf ${GITOPS_DIR}
+              GIT_SSH_COMMAND='ssh -i gitops_key -o StrictHostKeyChecking=no' \
+              git clone ${GITOPS_REPO} ${GITOPS_DIR}
+              """
+          }
+        }
+      }
+    }
+
 
     stage('Determine TARGET color') {
       steps {
@@ -198,26 +234,26 @@ pipeline {
             //
             // 1. Write SSH key to a local file
             //
-            def keyText = readFile(SSH_KEY)
-            writeFile file: 'gitops_key', text: keyText
-            sh "chmod 600 gitops_key"
+            // def keyText = readFile(SSH_KEY)
+            // writeFile file: 'gitops_key', text: keyText
+            // sh "chmod 600 gitops_key"
 
-            //
-            // 2. Ensure known_hosts exists
-            //
-            sh """
-              mkdir -p ~/.ssh
-              ssh-keyscan github.com >> ~/.ssh/known_hosts
-            """
+            // //
+            // // 2. Ensure known_hosts exists
+            // //
+            // sh """
+            //   mkdir -p ~/.ssh
+            //   ssh-keyscan github.com >> ~/.ssh/known_hosts
+            // """
 
-            //
-            // 3. Fresh clone using explicit SSH key (NO ssh-agent needed)
-            //
-            sh """
-              rm -rf ${GITOPS_DIR}
-              GIT_SSH_COMMAND='ssh -i gitops_key -o StrictHostKeyChecking=no' \
-              git clone ${GITOPS_REPO} ${GITOPS_DIR}
-            """
+            // //
+            // // 3. Fresh clone using explicit SSH key (NO ssh-agent needed)
+            // //
+            // sh """
+            //   rm -rf ${GITOPS_DIR}
+            //   GIT_SSH_COMMAND='ssh -i gitops_key -o StrictHostKeyChecking=no' \
+            //   git clone ${GITOPS_REPO} ${GITOPS_DIR}
+            // """
 
             //
             // 4. Enter GitOps repo
