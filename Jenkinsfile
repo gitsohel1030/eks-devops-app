@@ -160,11 +160,11 @@ pipeline {
       }
     }
 
-    stage('GitOps Update') {
+    stage('Clone GitOps Repo') {
       steps {
         script {
 
-          echo "Preparing to update GitOps repo..."
+          echo "Preparing to clone GitOps repo..."
 
           withCredentials([sshUserPrivateKey(credentialsId: 'github-ssh-gitops', keyFileVariable: 'SSH_KEY')]) {
 
