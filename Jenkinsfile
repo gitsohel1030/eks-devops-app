@@ -401,7 +401,7 @@ pipeline {
 
     // -------------------------------------------------------------
     // 7. ArgoCD Notes (Informational)
-    // WHY: Deployment is now fully GitOps-driven...
+    // WHY: Deployment is now fully GitOps-driven....
     // -------------------------------------------------------------
     stage('GitOps Info') {
       steps {
