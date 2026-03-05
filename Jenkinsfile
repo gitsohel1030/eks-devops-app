@@ -302,7 +302,7 @@ pipeline {
               echo "OTHER  patch file = ${otherPatch}"
 
               // Extract image tag from target patch
-              def imageLine = sh(script: "grep 'image:' ${GITOPS_DIR}/${targetPatch}", returnStdout: true).trim()
+              def imageLine = sh(script: "grep 'image:' ${targetPatch}", returnStdout: true).trim()
               def newImage = imageLine.split('image:')[1].trim()
               echo "Promoting image: ${newImage}"
 
