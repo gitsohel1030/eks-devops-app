@@ -174,9 +174,6 @@ pipeline {
 
 
     stage('Determine TARGET color') {
-      when { 
-        expression { params.PROMOTE == false && params.ROLLBACK == false } 
-      }
       steps {
         script {
           def release = readYaml file: 'eks-devops-gitops/k8s/overlays/prod/release.yaml'
