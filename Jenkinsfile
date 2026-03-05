@@ -260,7 +260,7 @@ pipeline {
               sh "git config user.email '${GIT_EMAIL}'"
               sh "git config user.name '${GIT_USER}'"
 
-              // Commit & push (explicit SSH key)
+              // Commit & push...
               sh """
                 git add ${relFile} ${patchFile} k8s/overlays/prod/kustomization.yaml
                 git commit -m 'GitOps deploy ${IMAGE_TAG} to ${TARGET_COLOR}' || echo 'No changes to commit'
