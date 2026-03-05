@@ -223,6 +223,9 @@ pipeline {
 
             // 4. Enter GitOps repo
             dir("${GITOPS_DIR}") {
+              def keyText = readFile(SSH_KEY)
+              writeFile file: 'gitops_key', text: keyText
+              sh "chmod 600 gitops_key"
               // Ensure remote uses SSH
               sh "git remote set-url origin ${GITOPS_REPO}"
 
