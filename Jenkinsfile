@@ -383,7 +383,7 @@ pipeline {
       echo "GitOps Blue/Green update complete — Target Color: ${env.TARGET_COLOR}"
     }
     failure {
-      echo "Something went wrong during GitOps update."
+      echo "Something went wrong during GitOps update..."
     }
   }  
 }
