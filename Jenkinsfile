@@ -204,9 +204,9 @@ pipeline {
           echo "Preparing to update GitOps repo..."
           withCredentials([sshUserPrivateKey(credentialsId: 'github-ssh-gitops', keyFileVariable: 'SSH_KEY')]) {
             // 1. Write SSH key to a local file
-            def keyText = readFile(SSH_KEY)
-            writeFile file: 'gitops_key', text: keyText
-            sh "chmod 600 gitops_key"
+            // def keyText = readFile(SSH_KEY)
+            // writeFile file: 'gitops_key', text: keyText
+            // sh "chmod 600 gitops_key"
 
             // 2. Ensure known_hosts exists
             // sh """
@@ -217,21 +217,18 @@ pipeline {
             // 3. Fresh clone using explicit SSH key (NO ssh-agent needed)
             sh """
               rm -rf ${GITOPS_DIR}
-              GIT_SSH_COMMAND='ssh -i gitops_key -o StrictHostKeyChecking=accept-new' \
+              GIT_SSH_COMMAND='ssh -i ${SSH_KEY} -o StrictHostKeyChecking=accept-new' \
               git clone ${GITOPS_REPO} ${GITOPS_DIR}
             """
 
             // 4. Enter GitOps repo
             dir("${GITOPS_DIR}") {
-              def keyText = readFile(SSH_KEY)
-              writeFile file: 'gitops_key', text: keyText
-              sh "chmod 600 gitops_key"
               // Ensure remote uses SSH
               sh "git remote set-url origin ${GITOPS_REPO}"
 
               // Checkout & pull main (using same SSH key)
               sh """
-                GIT_SSH_COMMAND='ssh -i gitops_key -o StrictHostKeyChecking=accept-new' \
+                GIT_SSH_COMMAND='ssh -i ${SSH_KEY} -o StrictHostKeyChecking=accept-new' \
                 git checkout main
                 git pull origin main || echo 'No changes to pull'
               """
@@ -267,7 +264,7 @@ pipeline {
               sh """
                 git add ${relFile} ${patchFile} k8s/overlays/prod/kustomization.yaml
                 git commit -m 'GitOps deploy ${IMAGE_TAG} to ${TARGET_COLOR}' || echo 'No changes to commit'
-                GIT_SSH_COMMAND='ssh -i gitops_key -o StrictHostKeyChecking=accept-new' \
+                GIT_SSH_COMMAND='ssh -i ${SSH_KEY} -o StrictHostKeyChecking=accept-new' \
                 git push origin main
               """
             }            
