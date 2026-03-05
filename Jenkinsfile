@@ -202,74 +202,72 @@ pipeline {
       steps {
         script {
           echo "Preparing to update GitOps repo..."
-          withCredentials([sshUserPrivateKey(credentialsId: 'github-ssh-gitops', keyFileVariable: 'SSH_KEY')]) {
-            withCredentials([file(credentialsId: 'github-known-hosts', variable: 'KNOWN_HOSTS')]) {
-              // 1. Write SSH key to a local file
-              // def keyText = readFile(SSH_KEY)
-              // writeFile file: 'gitops_key', text: keyText
-              // sh "chmod 600 gitops_key"
+          withCredentials([sshUserPrivateKey(credentialsId: 'github-ssh-gitops', keyFileVariable: 'SSH_KEY'), file(credentialsId: 'github-known-hosts', variable: 'KNOWN_HOSTS')]) {
+            // 1. Write SSH key to a local file
+            // def keyText = readFile(SSH_KEY)
+            // writeFile file: 'gitops_key', text: keyText
+            // sh "chmod 600 gitops_key"
 
-              // 2. Ensure known_hosts exists
-              // sh """
-              //   mkdir -p ~/.ssh
-              //   ssh-keyscan github.com >> ~/.ssh/known_hosts
-              // """
+            // 2. Ensure known_hosts exists
+            // sh """
+            //   mkdir -p ~/.ssh
+            //   ssh-keyscan github.com >> ~/.ssh/known_hosts
+            // """
 
-              // 3. Fresh clone using explicit SSH key (NO ssh-agent needed)
+            // 3. Fresh clone using explicit SSH key (NO ssh-agent needed)
+            sh """
+              rm -rf ${GITOPS_DIR}
+              GIT_SSH_COMMAND='ssh -i ${SSH_KEY} -o UserKnownHostsFile=${KNOWN_HOSTS} -o StrictHostKeyChecking=yes' \
+              git clone ${GITOPS_REPO} ${GITOPS_DIR}
+            """
+
+            // 4. Enter GitOps repo
+            dir("${GITOPS_DIR}") {
+              // Ensure remote uses SSH
+              sh "git remote set-url origin ${GITOPS_REPO}"
+
+              // Checkout & pull main (using same SSH key)
               sh """
-                rm -rf ${GITOPS_DIR}
                 GIT_SSH_COMMAND='ssh -i ${SSH_KEY} -o UserKnownHostsFile=${KNOWN_HOSTS} -o StrictHostKeyChecking=yes' \
-                git clone ${GITOPS_REPO} ${GITOPS_DIR}
+                git checkout main
+                git pull origin main || echo 'No changes to pull'
               """
+              
+              // Update release.yaml
+              //
+              def relFile = "k8s/overlays/prod/release.yaml"
+              def relContent = readFile(relFile)
+              relContent = relContent.replaceAll(/activeColor:.*/, "activeColor: ${TARGET_COLOR}")
+              writeFile file: relFile, text: relContent
 
-              // 4. Enter GitOps repo
-              dir("${GITOPS_DIR}") {
-                // Ensure remote uses SSH
-                sh "git remote set-url origin ${GITOPS_REPO}"
+              // ---- Update image patch for TARGET color only ----
+              def patchFile = "k8s/overlays/prod/patch-${env.TARGET_COLOR}-image.yaml"
 
-                // Checkout & pull main (using same SSH key)
-                sh """
-                  GIT_SSH_COMMAND='ssh -i ${SSH_KEY} -o UserKnownHostsFile=${KNOWN_HOSTS} -o StrictHostKeyChecking=yes' \
-                  git checkout main
-                  git pull origin main || echo No changes to pull'
-                """
-                
-                // Update release.yaml
-                //
-                def relFile = "k8s/overlays/prod/release.yaml"
-                def relContent = readFile(relFile)
-                relContent = relContent.replaceAll(/activeColor:.*/, "activeColor: ${TARGET_COLOR}")
-                writeFile file: relFile, text: relContent
+              def patchContent = readFile(patchFile)
+              patchContent = patchContent.replaceAll(/image:.*/, "image: ${ECR_REPO}:${IMAGE_TAG}")
+              writeFile file: patchFile, text: patchContent
 
-                // ---- Update image patch for TARGET color only ----
-                def patchFile = "k8s/overlays/prod/patch-${env.TARGET_COLOR}-image.yaml"
+              echo "Updated image patch → ${patchFile}"
 
-                def patchContent = readFile(patchFile)
-                patchContent = patchContent.replaceAll(/image:.*/, "image: ${ECR_REPO}:${IMAGE_TAG}")
-                writeFile file: patchFile, text: patchContent
+              // ---- UPDATE TRAFFIC PATCH ----
+              def trafficPatch = (env.TARGET_COLOR == "green") ? "traffic/traffic-green-100.yaml" : "traffic/traffic-blue-100.yaml"
+              def currentPatch = (env.TARGET_COLOR == "green") ? "traffic/traffic-blue-100.yaml" : "traffic/traffic-green-100.yaml"
+              sh "sed -i 's|${currentPatch}|${trafficPatch}|g' k8s/overlays/prod/kustomization.yaml"
 
-                echo "Updated image patch → ${patchFile}"
+              echo "Updated traffic patch → ${trafficPatch}"
 
-                // ---- UPDATE TRAFFIC PATCH ----
-                def trafficPatch = (env.TARGET_COLOR == "green") ? "traffic/traffic-green-100.yaml" : "traffic/traffic-blue-100.yaml"
-                def currentPatch = (env.TARGET_COLOR == "green") ? "traffic/traffic-blue-100.yaml" : "traffic/traffic-green-100.yaml"
-                sh "sed -i 's|${currentPatch}|${trafficPatch}|g' k8s/overlays/prod/kustomization.yaml"
+              // Git config
+              sh "git config user.email '${GIT_EMAIL}'"
+              sh "git config user.name '${GIT_USER}'"
 
-                echo "Updated traffic patch → ${trafficPatch}"
-
-                // Git config
-                sh "git config user.email '${GIT_EMAIL}'"
-                sh "git config user.name '${GIT_USER}'"
-
-                // Commit & push (explicit SSH key)
-                sh """
-                  git add ${relFile} ${patchFile} k8s/overlays/prod/kustomization.yaml
-                  git commit -m 'GitOps deploy ${IMAGE_TAG} to ${TARGET_COLOR}' || echo 'No changes to commit'
-                  GIT_SSH_COMMAND='ssh -i ${SSH_KEY} -o UserKnownHostsFile=${KNOWN_HOSTS} -o StrictHostKeyChecking=yes' \
-                  git push origin main
-                """
-              }
-            }
+              // Commit & push (explicit SSH key)
+              sh """
+                git add ${relFile} ${patchFile} k8s/overlays/prod/kustomization.yaml
+                git commit -m 'GitOps deploy ${IMAGE_TAG} to ${TARGET_COLOR}' || echo 'No changes to commit'
+                GIT_SSH_COMMAND='ssh -i ${SSH_KEY} -o UserKnownHostsFile=${KNOWN_HOSTS} -o StrictHostKeyChecking=yes' \
+                git push origin main
+              """
+            }            
           }
         }
       }
