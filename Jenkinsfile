@@ -210,10 +210,10 @@ pipeline {
               // sh "chmod 600 gitops_key"
 
               // 2. Ensure known_hosts exists
-              sh """
-                mkdir -p ~/.ssh
-                ssh-keyscan github.com >> ~/.ssh/known_hosts
-              """
+              // sh """
+              //   mkdir -p ~/.ssh
+              //   ssh-keyscan github.com >> ~/.ssh/known_hosts
+              // """
 
               // 3. Fresh clone using explicit SSH key (NO ssh-agent needed)
               sh """
@@ -231,7 +231,7 @@ pipeline {
                 sh """
                   GIT_SSH_COMMAND='ssh -i ${SSH_KEY} -o UserKnownHostsFile=${KNOWN_HOSTS} -o StrictHostKeyChecking=yes' \
                   git checkout main
-                  git pull origin main || true
+                  git pull origin main || echo No changes to pull'
                 """
                 
                 // Update release.yaml
@@ -251,14 +251,10 @@ pipeline {
                 echo "Updated image patch → ${patchFile}"
 
                 // ---- UPDATE TRAFFIC PATCH ----
-                def trafficPatch = (env.TARGET_COLOR == "green")
-                    ? "traffic/traffic-green-100.yaml"
-                    : "traffic/traffic-blue-100.yaml"
+                def trafficPatch = (env.TARGET_COLOR == "green") ? "traffic/traffic-green-100.yaml" : "traffic/traffic-blue-100.yaml"
+                def currentPatch = (env.TARGET_COLOR == "green") ? "traffic/traffic-blue-100.yaml" : "traffic/traffic-green-100.yaml"
+                sh "sed -i 's|${currentPatch}|${trafficPatch}|g' k8s/overlays/prod/kustomization.yaml"
 
-                sh """
-                  sed -i 's|traffic/traffic-blue-100.yaml|${trafficPatch}|g' k8s/overlays/prod/kustomization.yaml
-                  sed -i 's|traffic/traffic-green-100.yaml|${trafficPatch}|g' k8s/overlays/prod/kustomization.yaml
-                """
                 echo "Updated traffic patch → ${trafficPatch}"
 
                 // Git config
@@ -267,8 +263,8 @@ pipeline {
 
                 // Commit & push (explicit SSH key)
                 sh """
-                  git add .
-                  git commit -m 'GitOps deploy ${IMAGE_TAG} to ${TARGET_COLOR}' || true
+                  git add ${relFile} ${patchFile} k8s/overlays/prod/kustomization.yaml
+                  git commit -m 'GitOps deploy ${IMAGE_TAG} to ${TARGET_COLOR}' || echo 'No changes to commit'
                   GIT_SSH_COMMAND='ssh -i ${SSH_KEY} -o UserKnownHostsFile=${KNOWN_HOSTS} -o StrictHostKeyChecking=yes' \
                   git push origin main
                 """
