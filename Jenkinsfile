@@ -270,71 +270,53 @@ pipeline {
       }
     }
   
-    stage('Promote TARGET Version to Baseline (Manual Trigger)') {
-      when {
-        expression { return params.PROMOTE == true }
-      }
-      steps {                      
-      echo "PROMOTION TRIGGERED: Syncing baseline image..."
+    
+    stage('Promote TARGET Image to Baseline (Manual)') {
+      when { expression { params.PROMOTE == true } }
+      steps {
         script {
+          def other = (TARGET_COLOR == "blue") ? "green" : "blue"
           withCredentials([sshUserPrivateKey(credentialsId: 'github-ssh-gitops', keyFileVariable: 'SSH_KEY')]) {
-            // 1. Write SSH key to a local file
-            // def keyText = readFile(SSH_KEY)
-            // writeFile file: 'gitops_key', text: keyText
-            // sh "chmod 600 gitops_key"
+
+            writeFile file: 'gitops_key', text: readFile(SSH_KEY)
+            sh "chmod 600 gitops_key"
+
+            sh """
+              rm -rf ${GITOPS_DIR}
+              GIT_SSH_COMMAND='ssh -i gitops_key -o StrictHostKeyChecking=no' \
+              git clone ${GITOPS_REPO} ${GITOPS_DIR}
+            """
 
             dir("${GITOPS_DIR}") {
-              // Ensure remote uses SSH
-              sh "git remote set-url origin ${GITOPS_REPO}"
 
-              // Checkout & pull main (using same SSH key)
+              // Ensure correct branch
+              sh "git checkout main"
+              sh "GIT_SSH_COMMAND='ssh -i ../gitops_key -o StrictHostKeyChecking=no' git pull origin main"
+
+              // Read target patch image
+              def targetFile = "k8s/overlays/prod/patch-${TARGET_COLOR}-image.yaml"
+              def imageLine = sh(script: "grep 'image:' ${targetFile}", returnStdout: true).trim()
+              def tag = imageLine.split(':').last().trim()
+
+              // Apply same tag to other color
+              def otherFile = "k8s/overlays/prod/patch-${other}-image.yaml"
+              def otherContent = readFile(otherFile)
+              otherContent = otherContent.replaceAll(/image:.*/, "image: ${ECR_REPO}:${tag}")
+              writeFile file: otherFile, text: otherContent
+
+              sh "git add ."
+              sh "git commit -m 'Promote ${tag} to baseline (${other})' || true"
+
               sh """
-                GIT_SSH_COMMAND='ssh -i ${SSH_KEY} -o StrictHostKeyChecking=accept-new' \
-                git checkout main
-                git pull origin main || true
+                GIT_SSH_COMMAND='ssh -i ../gitops_key -o StrictHostKeyChecking=no' \
+                git push origin main
               """
-
-              def otherColor = (env.TARGET_COLOR == "green") ? "blue" : "green"
-              def targetPatch = "k8s/overlays/prod/patch-${env.TARGET_COLOR}-image.yaml"
-              def otherPatch  = "k8s/overlays/prod/patch-${otherColor}-image.yaml"
-
-              echo "TARGET patch file = ${targetPatch}"
-              echo "OTHER  patch file = ${otherPatch}"
-
-              // Extract image tag from target patch
-              def imageLine = sh(script: "grep 'image:' ${GITOPS_REPO}/${targetPatch}", returnStdout: true).trim()
-              def newImage = imageLine.split('image:')[1].trim()
-              echo "Promoting image: ${newImage}"
-
-              // Replace image in other patch
-              def otherContent = readFile("${GITOPS_DIR}/${otherPatch}")
-              otherContent = otherContent.replaceAll(/image:.*/, "image: ${newImage}")
-              writeFile file: "${GITOPS_DIR}/${otherPatch}", text: otherContent
-
-              // Commit + Push            
-              dir("${GITOPS_DIR}") {
-                sh "git config user.email '${GIT_EMAIL}'"
-                sh "git config user.name '${GIT_USER}'"
-
-                sh "git add ${otherFilePath}"
-
-                sh """
-                  git commit -m 'Promote ${newImage} to baseline (${otherColor})' \
-                    || echo 'No promotion commit needed'
-                """
-
-                sh """
-                  GIT_SSH_COMMAND='ssh -i ${SSH_KEY} -o StrictHostKeyChecking=accept-new' \
-                  git push origin main
-                """
-
-                echo "PROMOTION COMPLETE: Baseline updated to ${newImage}"
-              }
             }
           }
         }
       }
-    } 
+    }
+
 
 
     
