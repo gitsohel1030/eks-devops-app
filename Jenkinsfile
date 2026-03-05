@@ -279,9 +279,9 @@ pipeline {
     stage('Promote TARGET Version to Baseline (Manual Trigger)') {
       when {
         expression { return params.PROMOTE == true }
-      }              
+      }
+      steps {                      
       echo "PROMOTION TRIGGERED: Syncing baseline image..."
-      steps {
         script {
           withCredentials([sshUserPrivateKey(credentialsId: 'github-ssh-gitops', keyFileVariable: 'SSH_KEY')]) {
             // 1. Write SSH key to a local file
