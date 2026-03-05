@@ -394,7 +394,7 @@ pipeline {
       }
     }
   }
-  
+
   post {
     success {
       echo "GitOps Blue/Green update complete — Target Color: ${env.TARGET_COLOR}"
@@ -403,4 +403,5 @@ pipeline {
       echo "Something went wrong during GitOps update."
     }
   }  
+}
 }
