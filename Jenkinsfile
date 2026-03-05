@@ -283,7 +283,7 @@ pipeline {
 
             sh """
               rm -rf ${GITOPS_DIR}
-              GIT_SSH_COMMAND='ssh -i gitops_key -o StrictHostKeyChecking=no' \
+              GIT_SSH_COMMAND='ssh -i gitops_key -o StrictHostKeyChecking=accept-new' \
               git clone ${GITOPS_REPO} ${GITOPS_DIR}
             """
 
@@ -308,7 +308,7 @@ pipeline {
               sh "git commit -m 'Promote ${tag} to baseline (${other})' || true"
 
               sh """
-                GIT_SSH_COMMAND='ssh -i ../gitops_key -o StrictHostKeyChecking=no' \
+                GIT_SSH_COMMAND='ssh -i ../gitops_key -o StrictHostKeyChecking=accept-new' \
                 git push origin main
               """
             }
@@ -330,12 +330,12 @@ pipeline {
 
             // Revert last commit
             sh """
-              GIT_SSH_COMMAND='ssh -i gitops_key -o StrictHostKeyChecking=no' \
+              GIT_SSH_COMMAND='ssh -i gitops_key -o StrictHostKeyChecking=accept-new' \
               git -C ${GITOPS_DIR} revert --no-edit HEAD
             """
 
             sh """
-              GIT_SSH_COMMAND='ssh -i gitops_key -o StrictHostKeyChecking=no' \
+              GIT_SSH_COMMAND='ssh -i gitops_key -o StrictHostKeyChecking=accept-new' \
               git -C ${GITOPS_DIR} push origin main
             """
           }
