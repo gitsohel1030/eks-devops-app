@@ -78,9 +78,12 @@ pipeline {
     }
 
 
-    // stage('Configure Kubectl') {
-    //   steps { sh 'aws eks update-kubeconfig --region ${AWS_REGION} --name ${CLUSTER_NAME}' }
-    // }
+    stage('Configure Kubectl') {
+      steps { 
+        sh "mv ~/.kube/config ~/.kube/config.bak.$(date +%s) 2>/dev/null || true"
+        sh "aws eks update-kubeconfig --region ${AWS_REGION} --name ${CLUSTER_NAME}" 
+        }
+    }
 
     // DEPRECATED
       // stage('Check if Deploy Needed') {
