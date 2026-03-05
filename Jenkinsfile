@@ -317,8 +317,6 @@ pipeline {
       }
     }
 
-
-
     
     stage('Rollback Last Deployment (Manual)') {
       when { expression { params.ROLLBACK == true } }
@@ -345,10 +343,6 @@ pipeline {
       }
     }
 
-    // -------------------------------------------------------------
-    // 7. ArgoCD Notes (Informational)
-    // WHY: Deployment is now fully GitOps-driven....
-    // -------------------------------------------------------------
     stage('GitOps Info') {
       steps {
         echo """
