@@ -202,7 +202,7 @@ pipeline {
       steps {
         script {
           echo "Preparing to update GitOps repo..."
-          withCredentials([sshUserPrivateKey(credentialsId: 'github-ssh-gitops', keyFileVariable: 'SSH_KEY'), file(credentialsId: 'github-known-hosts', variable: 'KNOWN_HOSTS')]) {
+          withCredentials([sshUserPrivateKey(credentialsId: 'github-ssh-gitops', keyFileVariable: 'SSH_KEY')]) {
             // 1. Write SSH key to a local file
             // def keyText = readFile(SSH_KEY)
             // writeFile file: 'gitops_key', text: keyText
@@ -217,7 +217,7 @@ pipeline {
             // 3. Fresh clone using explicit SSH key (NO ssh-agent needed)
             sh """
               rm -rf ${GITOPS_DIR}
-              GIT_SSH_COMMAND='ssh -i ${SSH_KEY} -o UserKnownHostsFile=${KNOWN_HOSTS} -o StrictHostKeyChecking=yes' \
+              GIT_SSH_COMMAND='ssh -i ${SSH_KEY} -o UserKnownHostsFile=${KNOWN_HOSTS} -o StrictHostKeyChecking=accept-new' \
               git clone ${GITOPS_REPO} ${GITOPS_DIR}
             """
 
