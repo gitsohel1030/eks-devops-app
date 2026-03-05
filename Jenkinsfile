@@ -196,9 +196,9 @@ pipeline {
     }   
  
     stage('Push changes in git') {      
-      // when { 
-      //   expression { params.PROMOTE == false && params.ROLLBACK == false } 
-      // }
+      when { 
+        expression { params.PROMOTE == false && params.ROLLBACK == false } 
+      }
       steps {
         script {
           echo "Preparing to update GitOps repo..."
