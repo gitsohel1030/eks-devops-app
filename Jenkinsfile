@@ -279,9 +279,9 @@ pipeline {
         script {
           withCredentials([sshUserPrivateKey(credentialsId: 'github-ssh-gitops', keyFileVariable: 'SSH_KEY')]) {
             // 1. Write SSH key to a local file
-            def keyText = readFile(SSH_KEY)
-            writeFile file: 'gitops_key', text: keyText
-            sh "chmod 600 gitops_key"
+            // def keyText = readFile(SSH_KEY)
+            // writeFile file: 'gitops_key', text: keyText
+            // sh "chmod 600 gitops_key"
 
             dir("${GITOPS_DIR}") {
               // Ensure remote uses SSH
@@ -289,7 +289,7 @@ pipeline {
 
               // Checkout & pull main (using same SSH key)
               sh """
-                GIT_SSH_COMMAND='ssh -i ../gitops_key -o StrictHostKeyChecking=no' \
+                GIT_SSH_COMMAND='ssh -i ${SSH_KEY} -o StrictHostKeyChecking=accept-new' \
                 git checkout main
                 git pull origin main || true
               """
@@ -302,7 +302,7 @@ pipeline {
               echo "OTHER  patch file = ${otherPatch}"
 
               // Extract image tag from target patch
-              def imageLine = sh(script: "grep 'image:' ${targetPatch}", returnStdout: true).trim()
+              def imageLine = sh(script: "grep 'image:' ${GITOPS_REPO}/${targetPatch}", returnStdout: true).trim()
               def newImage = imageLine.split('image:')[1].trim()
               echo "Promoting image: ${newImage}"
 
@@ -324,11 +324,11 @@ pipeline {
                 """
 
                 sh """
-                  GIT_SSH_COMMAND='ssh -i ../gitops_key -o StrictHostKeyChecking=no' \
+                  GIT_SSH_COMMAND='ssh -i ${SSH_KEY} -o StrictHostKeyChecking=accept-new' \
                   git push origin main
                 """
 
-                echo "🎉 PROMOTION COMPLETE: Baseline updated to ${newImage}"
+                echo "PROMOTION COMPLETE: Baseline updated to ${newImage}"
               }
             }
           }
