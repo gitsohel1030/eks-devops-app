@@ -136,41 +136,41 @@ pipeline {
       }
     }
 
-    // stage('Clone GitOps Repo') {
-    //   steps {
-    //     script {
+    stage('Clone GitOps Repo') {
+      when { 
+        expression { params.PROMOTE == false && params.ROLLBACK == false } 
+      }
+      steps {
+        script {
+          withCredentials([sshUserPrivateKey(credentialsId: 'github-ssh-gitops', keyFileVariable: 'SSH_KEY')]) {
 
-    //       echo "Preparing to clone GitOps repo..."
+            //
+            // 1. Write SSH key to a local file
+            //
+            def keyText = readFile(SSH_KEY)
+            writeFile file: 'gitops_key', text: keyText
+            sh "chmod 600 gitops_key"
 
-    //       withCredentials([sshUserPrivateKey(credentialsId: 'github-ssh-gitops', keyFileVariable: 'SSH_KEY')]) {
+            //
+            // 2. Ensure known_hosts exists
+            //
+            // sh """
+            //   mkdir -p ~/.ssh
+            //   ssh-keyscan github.com >> ~/.ssh/known_hosts
+            // """
 
-    //         //
-    //         // 1. Write SSH key to a local file
-    //         //
-    //         def keyText = readFile(SSH_KEY)
-    //         writeFile file: 'gitops_key', text: keyText
-    //         sh "chmod 600 gitops_key"
-
-    //         //
-    //         // 2. Ensure known_hosts exists
-    //         //
-    //         sh """
-    //           mkdir -p ~/.ssh
-    //           ssh-keyscan github.com >> ~/.ssh/known_hosts
-    //         """
-
-    //         //
-    //         // 3. Fresh clone using explicit SSH key (NO ssh-agent needed)
-    //         //
-    //         sh """
-    //           rm -rf ${GITOPS_DIR}
-    //           GIT_SSH_COMMAND='ssh -i gitops_key -o StrictHostKeyChecking=no' \
-    //           git clone ${GITOPS_REPO} ${GITOPS_DIR}
-    //           """
-    //       }
-    //     }
-    //   }
-    // }
+            //
+            // 3. Fresh clone using explicit SSH key (NO ssh-agent needed)
+            //
+            sh """
+              rm -rf ${GITOPS_DIR}
+              GIT_SSH_COMMAND='ssh -i gitops_key -o StrictHostKeyChecking=accept-new' \
+              git clone ${GITOPS_REPO} ${GITOPS_DIR}
+              """
+          }
+        }
+      }
+    }
 
 
     stage('Determine TARGET color') {
@@ -211,12 +211,12 @@ pipeline {
             //   ssh-keyscan github.com >> ~/.ssh/known_hosts
             // """
 
-            // 3. Fresh clone using explicit SSH key (NO ssh-agent needed)
-            sh """
-              rm -rf ${GITOPS_DIR}
-              GIT_SSH_COMMAND='ssh -i gitops_key -o StrictHostKeyChecking=accept-new' \
-              git clone ${GITOPS_REPO} ${GITOPS_DIR}
-            """
+            // // 3. Fresh clone using explicit SSH key (NO ssh-agent needed)
+            // sh """
+            //   rm -rf ${GITOPS_DIR}
+            //   GIT_SSH_COMMAND='ssh -i gitops_key -o StrictHostKeyChecking=accept-new' \
+            //   git clone ${GITOPS_REPO} ${GITOPS_DIR}
+            // """
 
             // 4. Enter GitOps repo
             dir("${GITOPS_DIR}") {
