@@ -404,5 +404,5 @@ Jenkins → Build with Parameters
 
 | Repository | Purpose |
 |---|---|
-| [aws-eks-devops-platform](https://github.com/YOUR_USERNAME/aws-eks-devops-platform) | Terraform infrastructure — EKS, VPC, IAM, ArgoCD install |
-| [eks-devops-gitops](https://github.com/YOUR_USERNAME/eks-devops-gitops) | GitOps manifests — ArgoCD Applications, Kubernetes configs, Helm values |
+| [aws-eks-devops-platform](https://github.com/gitsohel1030/aws-eks-devops-platform) | Terraform infrastructure — EKS, VPC, IAM, ArgoCD install |
+| [eks-devops-gitops](https://github.com/gitsohel1030/eks-devops-gitops) | GitOps manifests — ArgoCD Applications, Kubernetes configs, Helm values |
